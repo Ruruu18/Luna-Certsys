@@ -9,7 +9,7 @@ import {
   Dimensions,
   SafeAreaView,
 } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
+import StatusBarWrapper from '../components/StatusBarWrapper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
@@ -180,7 +180,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="light" backgroundColor={theme.colors.primary} />
+      <StatusBarWrapper backgroundColor={theme.colors.primary} style="light" />
       
       {/* Header */}
       <LinearGradient

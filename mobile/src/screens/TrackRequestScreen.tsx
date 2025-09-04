@@ -11,7 +11,7 @@ import {
   SafeAreaView,
   ActivityIndicator,
 } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
+import StatusBarWrapper from '../components/StatusBarWrapper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
@@ -248,7 +248,7 @@ export default function TrackRequestScreen({ navigation }: TrackRequestScreenPro
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="light" backgroundColor={theme.colors.primary} />
+      <StatusBarWrapper backgroundColor={theme.colors.primary} style="light" />
       
       {/* Header */}
       <LinearGradient

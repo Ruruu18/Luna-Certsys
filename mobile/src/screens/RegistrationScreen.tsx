@@ -15,7 +15,7 @@ import {
   ImageBackground,
 } from 'react-native';
 
-import { StatusBar } from 'expo-status-bar';
+import StatusBarWrapper from '../components/StatusBarWrapper';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
@@ -604,7 +604,7 @@ export default function RegistrationScreen({ navigation }: RegistrationScreenPro
 
   return (
     <View style={styles.container}>
-      <StatusBar style="light" />
+      <StatusBarWrapper style="light" />
       <ImageBackground
         source={require('../../assets/images/backdrop.png')}
         style={styles.backgroundImage}

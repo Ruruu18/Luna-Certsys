@@ -14,7 +14,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { StatusBar } from 'expo-status-bar';
+import StatusBarWrapper from '../components/StatusBarWrapper';
 import { theme } from '../styles/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { testNetworkConnection, testSupabaseAuth } from '../utils/networkTest';
@@ -80,7 +80,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
       style={styles.container} 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <StatusBar style="light" />
+      <StatusBarWrapper style="light" />
       <ImageBackground
         source={require('../../assets/images/backdrop.png')}
         style={styles.backgroundImage}

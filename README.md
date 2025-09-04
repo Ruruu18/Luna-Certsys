@@ -36,6 +36,7 @@ Before you begin, ensure you have the following installed:
 - **Git** - [Download here](https://git-scm.com/)
 
 #### For Mobile Development:
+
 - **Expo CLI**: `npm install -g @expo/cli`
 - **Android Studio** (for Android development) or **Xcode** (for iOS development)
 - **Expo Go app** on your phone for testing (optional)
@@ -43,6 +44,7 @@ Before you begin, ensure you have the following installed:
 ### 🛠️ Installation
 
 1. **Clone the repository**
+
    ```bash
    git clone git@github.com:Ruruu18/Luna-Certsys.git
    cd Luna-Certsys
@@ -57,25 +59,29 @@ Before you begin, ensure you have the following installed:
 ### 🗄️ Database Setup (Supabase)
 
 1. **Create a Supabase project**
+
    - Go to [Supabase](https://supabase.com)
    - Create a new project
    - Note your project URL and anon key
 
 2. **Run the database schema**
+
    - Go to your Supabase dashboard
    - Navigate to SQL Editor
    - Copy and paste the contents of `supabase-schema.sql`
    - Run the script to create tables and policies
 
 3. **Configure environment variables**
-   
+
    **For Web App** (`web/.env.local`):
+
    ```env
    VITE_SUPABASE_URL=your_supabase_project_url
    VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
    ```
-   
+
    **For Mobile App** (`mobile/.env`):
+
    ```env
    EXPO_PUBLIC_SUPABASE_URL=your_supabase_project_url
    EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
@@ -94,6 +100,7 @@ npm run dev
 ```
 
 **Default Admin Login:**
+
 - Email: `admin@resare.com`
 - Password: (Set up through Supabase Auth)
 
@@ -108,6 +115,7 @@ npm start
 ```
 
 **Development Options:**
+
 - **Expo Go**: Scan QR code with Expo Go app
 - **iOS Simulator**: Press `i` in terminal
 - **Android Emulator**: Press `a` in terminal
@@ -116,6 +124,7 @@ npm start
 ## 🔧 Available Scripts
 
 ### Root Level Commands
+
 ```bash
 npm run dev:web          # Start web development server
 npm run dev:mobile       # Start mobile development server
@@ -128,6 +137,7 @@ npm run install:all      # Install dependencies for all workspaces
 ```
 
 ### Web App Commands (run in `/web` directory)
+
 ```bash
 npm run dev              # Start development server
 npm run build            # Build for production
@@ -138,6 +148,7 @@ npm run type-check       # Run TypeScript type checking
 ```
 
 ### Mobile App Commands (run in `/mobile` directory)
+
 ```bash
 npm start                # Start Expo development server
 npx expo start           # Alternative start command
@@ -149,6 +160,7 @@ npx expo build           # Build for app stores
 ## 🏛️ Tech Stack
 
 ### Web Application (Admin Interface)
+
 - **Framework**: Vue 3 with Composition API
 - **Build Tool**: Vite
 - **Language**: TypeScript
@@ -160,6 +172,7 @@ npx expo build           # Build for app stores
 - **Database**: Supabase (PostgreSQL)
 
 ### Mobile Application (Resident App)
+
 - **Framework**: Expo (React Native)
 - **Language**: TypeScript
 - **Navigation**: React Navigation 6
@@ -169,6 +182,7 @@ npx expo build           # Build for app stores
 - **Database**: Supabase (PostgreSQL)
 
 ### Shared Technologies
+
 - **Backend**: Supabase (Auth, Database, Real-time)
 - **Authentication**: Supabase Auth with Row Level Security
 - **Database**: PostgreSQL with RLS policies
@@ -177,12 +191,14 @@ npx expo build           # Build for app stores
 ## 🎯 Features
 
 ### Web Admin Interface
+
 - **Dashboard**: Overview of certificate requests and system stats
 - **User Management**: Add, edit, and manage residents and purok chairmen
 - **Certificate Management**: Review, approve, and track certificate requests
 - **Authentication**: Secure admin login with role-based access
 
 ### Mobile Resident App
+
 - **User Registration/Login**: Secure authentication for residents
 - **Certificate Requests**: Submit requests for various certificates
 - **Request Tracking**: Track status of submitted requests
@@ -200,6 +216,7 @@ The system supports three user roles:
 ## 🗃️ Database Schema
 
 The database includes the following main tables:
+
 - **users**: User profiles with role-based access
 - **certificates**: Certificate records (legacy)
 - **certificate_requests**: New certificate request system
@@ -209,6 +226,7 @@ See `supabase-schema.sql` for complete schema with RLS policies.
 ## 🚀 Deployment
 
 ### Web Application
+
 ```bash
 cd web
 npm run build
@@ -216,6 +234,7 @@ npm run build
 ```
 
 ### Mobile Application
+
 ```bash
 cd mobile
 npx expo build
@@ -225,14 +244,17 @@ npx expo build
 ## 🔧 Development Tips
 
 ### Hot Reloading
+
 - **Web**: Vite provides instant hot module replacement
 - **Mobile**: Expo provides fast refresh for React Native
 
 ### Debugging
+
 - **Web**: Use browser DevTools + Vue DevTools extension
 - **Mobile**: Use React Native Debugger or Expo DevTools
 
 ### Code Quality
+
 - Both projects use ESLint and TypeScript for code quality
 - Pre-commit hooks can be added for automated linting
 
@@ -249,12 +271,14 @@ npx expo build
 ### Required Environment Variables
 
 **Web App** (`.env.local`):
+
 ```env
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
 ```
 
 **Mobile App** (`.env`):
+
 ```env
 EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
@@ -265,6 +289,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 ### Common Issues
 
 **Node Modules Issues:**
+
 ```bash
 # Clear all node_modules and reinstall
 rm -rf node_modules web/node_modules mobile/node_modules
@@ -272,6 +297,7 @@ npm run install:all
 ```
 
 **Expo Issues:**
+
 ```bash
 # Clear Expo cache
 cd mobile
@@ -279,6 +305,7 @@ npx expo start --clear
 ```
 
 **Build Issues:**
+
 ```bash
 # Clear build caches
 cd web && rm -rf dist node_modules/.vite
@@ -286,6 +313,7 @@ cd ../mobile && rm -rf .expo dist
 ```
 
 **Database Connection Issues:**
+
 - Verify your Supabase URL and keys in environment files
 - Check if RLS policies are properly set up
 - Ensure your Supabase project is active
@@ -293,6 +321,7 @@ cd ../mobile && rm -rf .expo dist
 ## 📧 Support
 
 If you encounter any issues or have questions:
+
 1. Check the troubleshooting section above
 2. Review the Supabase documentation
 3. Check Expo documentation for mobile-specific issues
