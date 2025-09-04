@@ -1,0 +1,38 @@
+{
+  "name": "resare",
+  "version": "1.0.0",
+  "description": "Resare - Vue Web and Expo Mobile Application",
+  "private": true,
+  "workspaces": [
+    "web",
+    "mobile"
+  ],
+  "scripts": {
+    "dev:web": "cd web && npm run dev",
+    "dev:mobile": "cd mobile && npm start",
+    "build:web": "cd web && npm run build",
+    "build:mobile": "cd mobile && npm run build",
+    "lint:web": "cd web && npm run lint",
+    "lint:mobile": "cd mobile && npm run lint",
+    "test:web": "cd web && npm run test",
+    "install:all": "npm install && cd web && npm install && cd ../mobile && npm install"
+  },
+  "keywords": [
+    "vue",
+    "expo",
+    "react-native",
+    "typescript",
+    "vite"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/react": "~19.0.10",
+    "typescript": "~5.8.3"
+  },
+  "dependencies": {
+    "@react-native/js-polyfills": "^0.81.1",
+    "react-dom": "^19.0.0",
+    "react-native-web": "^0.21.1"
+  }
+}

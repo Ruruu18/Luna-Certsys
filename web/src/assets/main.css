@@ -1,0 +1,39 @@
+@import './base.css';
+
+/* Global styles for full-screen web app */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+#app {
+  height: 100vh;
+  width: 100vw;
+  margin: 0;
+  padding: 0;
+  font-weight: normal;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Admin layout should take full screen */
+.admin-layout {
+  height: 100vh !important;
+  width: 100vw !important;
+}
+
+/* Remove default Vue styles that interfere */
+a,
+.green {
+  text-decoration: none;
+  color: hsla(160, 100%, 37%, 1);
+  transition: 0.4s;
+}
+
+@media (hover: hover) {
+  a:hover {
+    background-color: hsla(160, 100%, 37%, 0.2);
+  }
+}
