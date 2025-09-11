@@ -186,3 +186,6 @@ Thumbs.db
 
 # Supabase
 .supabase/
+node_modules
+node_modules
+node_modules
