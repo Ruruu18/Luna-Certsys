@@ -4,26 +4,40 @@
     <div class="view-header">
       <div class="header-left">
         <h2 class="view-title">Certificate Management</h2>
-        <p class="view-description">Manage certificate requests and approvals</p>
+        <p class="view-description">Manage all certificates from walk-in and mobile app requests</p>
       </div>
       <div class="header-right">
         <button @click="showAddModal = true" class="btn btn-primary">
           <svg class="btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
           </svg>
-          Add Certificate
+          Add Walk-in Certificate
         </button>
       </div>
     </div>
 
-    <!-- Filter Tabs -->
+    <!-- Source Filter Tabs -->
     <div class="filter-tabs">
+      <button
+        v-for="filter in sourceFilters"
+        :key="filter.value"
+        @click="activeSourceFilter = filter.value"
+        class="filter-tab"
+        :class="{ 'filter-tab-active': activeSourceFilter === filter.value }"
+      >
+        {{ filter.label }}
+        <span v-if="filter.count !== undefined" class="filter-count">{{ filter.count }}</span>
+      </button>
+    </div>
+
+    <!-- Status Filter Tabs -->
+    <div class="filter-tabs secondary-tabs">
       <button
         v-for="filter in statusFilters"
         :key="filter.value"
-        @click="activeFilter = filter.value"
+        @click="activeStatusFilter = filter.value"
         class="filter-tab"
-        :class="{ 'filter-tab-active': activeFilter === filter.value }"
+        :class="{ 'filter-tab-active': activeStatusFilter === filter.value }"
       >
         {{ filter.label }}
         <span v-if="filter.count !== undefined" class="filter-count">{{ filter.count }}</span>
@@ -32,13 +46,8 @@
 
     <!-- Certificates Table -->
     <div class="table-container">
-      <div v-if="certificatesStore.loading" class="loading">
-        <div class="spinner"></div>
-        <p>Loading certificates...</p>
-      </div>
-
-      <div v-else-if="certificatesStore.error" class="alert alert-error">
-        {{ certificatesStore.error }}
+      <div v-if="certificatesStore.error || requestsStore.error" class="alert alert-error">
+        {{ certificatesStore.error || requestsStore.error }}
       </div>
 
       <div v-else-if="filteredCertificates.length === 0" class="empty-state">
@@ -46,13 +55,14 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
         <h3>No certificates found</h3>
-        <p>{{ activeFilter === 'all' ? 'Get started by adding your first certificate' : `No ${activeFilter} certificates` }}</p>
-        <button @click="showAddModal = true" class="btn btn-primary">Add Certificate</button>
+        <p>{{ getEmptyStateMessage() }}</p>
+        <button @click="showAddModal = true" class="btn btn-primary">Add Walk-in Certificate</button>
       </div>
 
       <table v-else class="table">
         <thead>
           <tr>
+            <th>Source</th>
             <th>Certificate Type</th>
             <th>Requestor</th>
             <th>Purpose</th>
@@ -62,7 +72,15 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="certificate in filteredCertificates" :key="certificate.id">
+          <tr v-for="certificate in filteredCertificates" :key="certificate.id + certificate.source">
+            <td>
+              <span
+                class="badge"
+                :class="certificate.source === 'walk-in' ? 'badge-purple' : 'badge-blue'"
+              >
+                {{ certificate.source === 'walk-in' ? '🏢 Walk-in' : '📱 Mobile App' }}
+              </span>
+            </td>
             <td>
               <div class="certificate-type">
                 {{ certificate.certificate_type }}
@@ -82,62 +100,60 @@
                 class="badge"
                 :class="{
                   'badge-warning': certificate.status === 'pending',
-                  'badge-info': certificate.status === 'approved',
+                  'badge-info': certificate.status === 'approved' || certificate.status === 'in_progress',
                   'badge-success': certificate.status === 'completed',
                   'badge-danger': certificate.status === 'rejected'
                 }"
               >
-                {{ certificate.status }}
+                {{ formatStatus(certificate.status) }}
               </span>
             </td>
             <td>{{ formatDate(certificate.requested_at) }}</td>
             <td>
               <div class="action-buttons">
+                <!-- Approve button - for pending status -->
                 <button
                   v-if="certificate.status === 'pending'"
-                  @click="updateCertificateStatus(certificate, 'approved')"
-                  class="btn btn-success btn-sm"
+                  @click="updateStatus(certificate, 'approved')"
+                  class="btn-icon-only btn-icon-success"
                   title="Approve"
                 >
-                  <svg class="btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                   </svg>
                 </button>
+
+                <!-- Complete button - for approved/in_progress status -->
                 <button
-                  v-if="certificate.status === 'pending'"
-                  @click="updateCertificateStatus(certificate, 'rejected')"
-                  class="btn btn-danger btn-sm"
-                  title="Reject"
-                >
-                  <svg class="btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-                <button
-                  v-if="certificate.status === 'approved'"
-                  @click="updateCertificateStatus(certificate, 'completed')"
-                  class="btn btn-info btn-sm"
+                  v-if="certificate.status === 'approved' || certificate.status === 'in_progress'"
+                  @click="updateStatus(certificate, 'completed')"
+                  class="btn-icon-only btn-icon-primary"
                   title="Mark as completed"
                 >
-                  <svg class="btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </button>
+
+                <!-- View/Edit button - always visible -->
                 <button
-                  @click="editCertificate(certificate)"
-                  class="btn btn-outline btn-sm"
-                  title="Edit certificate"
+                  @click="viewCertificate(certificate)"
+                  class="btn-icon-only btn-icon-info"
+                  title="View/Edit certificate"
                 >
-                  <svg class="btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                   </svg>
                 </button>
+
+                <!-- Delete button - always visible -->
                 <button
-                  @click="confirmDeleteCertificate(certificate)"
-                  class="btn btn-danger btn-sm"
+                  @click="confirmDelete(certificate)"
+                  class="btn-icon-only btn-icon-danger"
                   title="Delete certificate"
                 >
-                  <svg class="btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
                 </button>
@@ -148,11 +164,11 @@
       </table>
     </div>
 
-    <!-- Add/Edit Certificate Modal -->
+    <!-- Add/Edit Certificate Modal (only for walk-in) -->
     <div v-if="showAddModal || showEditModal" class="modal" @click="closeModal">
       <div class="modal-content" @click.stop>
         <div class="modal-header">
-          <h3 class="modal-title">{{ showEditModal ? 'Edit Certificate' : 'Add New Certificate' }}</h3>
+          <h3 class="modal-title">{{ showEditModal ? 'Edit Walk-in Certificate' : 'Add Walk-in Certificate' }}</h3>
         </div>
 
         <div class="modal-body">
@@ -162,7 +178,7 @@
             </div>
 
             <div class="form-group">
-              <label for="user_id" class="form-label">User</label>
+              <label for="user_id" class="form-label">Resident</label>
               <select
                 id="user_id"
                 v-model="formData.user_id"
@@ -170,7 +186,7 @@
                 required
                 :disabled="formLoading"
               >
-                <option value="">Select a user</option>
+                <option value="">Select a resident</option>
                 <option v-for="user in availableUsers" :key="user.id" :value="user.id">
                   {{ user.full_name }} ({{ user.email }})
                 </option>
@@ -189,9 +205,9 @@
                 <option value="">Select certificate type</option>
                 <option value="Barangay Clearance">Barangay Clearance</option>
                 <option value="Certificate of Residency">Certificate of Residency</option>
-                <option value="Business Permit">Business Permit</option>
                 <option value="Certificate of Indigency">Certificate of Indigency</option>
-                <option value="Good Moral Certificate">Good Moral Certificate</option>
+                <option value="Business Permit">Business Permit</option>
+                <option value="Barangay ID">Barangay ID</option>
               </select>
             </div>
 
@@ -268,7 +284,7 @@
         </div>
 
         <div class="modal-body">
-          <p>Are you sure you want to delete this <strong>{{ certificateToDelete?.certificate_type }}</strong> certificate?</p>
+          <p>Are you sure you want to delete this <strong>{{ certificateToDelete?.source }}</strong> certificate?</p>
           <p class="text-sm text-gray-600">This action cannot be undone.</p>
         </div>
 
@@ -282,7 +298,7 @@
             Cancel
           </button>
           <button
-            @click="handleDeleteCertificate"
+            @click="handleDelete"
             type="button"
             class="btn btn-danger"
             :disabled="formLoading"
@@ -297,12 +313,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, computed } from 'vue'
 import { useCertificatesStore } from '../stores/certificates'
+import { useCertificateRequestsStore } from '../stores/certificateRequests'
 import { useUsersStore } from '../stores/users'
-import type { Certificate, User } from '../lib/supabase'
+import type { Certificate, CertificateRequest, User } from '../lib/supabase'
 
 const certificatesStore = useCertificatesStore()
+const requestsStore = useCertificateRequestsStore()
 const usersStore = useUsersStore()
 
 const showAddModal = ref(false)
@@ -310,9 +328,10 @@ const showEditModal = ref(false)
 const showDeleteModal = ref(false)
 const formLoading = ref(false)
 const formError = ref('')
-const certificateToDelete = ref<Certificate | null>(null)
+const certificateToDelete = ref<any | null>(null)
 const editingCertificate = ref<Certificate | null>(null)
-const activeFilter = ref('all')
+const activeSourceFilter = ref('all')
+const activeStatusFilter = ref('all')
 
 const formData = ref({
   user_id: '',
@@ -322,44 +341,120 @@ const formData = ref({
   notes: ''
 })
 
-const statusFilters = computed(() => [
+// Combine walk-in certificates and mobile app requests
+const allCertificates = computed(() => {
+  const walkIn = certificatesStore.certificates.map(cert => ({
+    ...cert,
+    source: 'walk-in' as const,
+    requested_at: cert.requested_at
+  }))
+
+  const mobileApp = requestsStore.requests.map(req => ({
+    ...req,
+    source: 'mobile-app' as const,
+    requested_at: req.created_at
+  }))
+
+  return [...walkIn, ...mobileApp].sort((a, b) =>
+    new Date(b.requested_at).getTime() - new Date(a.requested_at).getTime()
+  )
+})
+
+// Source filters
+const sourceFilters = computed(() => [
   {
-    label: 'All',
+    label: 'All Certificates',
     value: 'all',
+    count: allCertificates.value.length
+  },
+  {
+    label: '🏢 Walk-in',
+    value: 'walk-in',
     count: certificatesStore.certificates.length
   },
   {
-    label: 'Pending',
-    value: 'pending',
-    count: certificatesStore.certificates.filter(c => c.status === 'pending').length
-  },
-  {
-    label: 'Approved',
-    value: 'approved',
-    count: certificatesStore.certificates.filter(c => c.status === 'approved').length
-  },
-  {
-    label: 'Completed',
-    value: 'completed',
-    count: certificatesStore.certificates.filter(c => c.status === 'completed').length
-  },
-  {
-    label: 'Rejected',
-    value: 'rejected',
-    count: certificatesStore.certificates.filter(c => c.status === 'rejected').length
+    label: '📱 Mobile App',
+    value: 'mobile-app',
+    count: requestsStore.requests.length
   }
 ])
 
+// Status filters based on current source
+const statusFilters = computed(() => {
+  const filtered = allCertificates.value.filter(c =>
+    activeSourceFilter.value === 'all' || c.source === activeSourceFilter.value
+  )
+
+  return [
+    {
+      label: 'All',
+      value: 'all',
+      count: filtered.length
+    },
+    {
+      label: 'Pending',
+      value: 'pending',
+      count: filtered.filter(c => c.status === 'pending').length
+    },
+    {
+      label: 'Approved / In Progress',
+      value: 'approved',
+      count: filtered.filter(c => c.status === 'approved' || c.status === 'in_progress').length
+    },
+    {
+      label: 'Completed',
+      value: 'completed',
+      count: filtered.filter(c => c.status === 'completed').length
+    },
+    {
+      label: 'Rejected',
+      value: 'rejected',
+      count: filtered.filter(c => c.status === 'rejected').length
+    }
+  ]
+})
+
+// Filtered certificates
 const filteredCertificates = computed(() => {
-  if (activeFilter.value === 'all') {
-    return certificatesStore.certificates
+  let certs = allCertificates.value
+
+  // Apply source filter
+  if (activeSourceFilter.value !== 'all') {
+    certs = certs.filter(c => c.source === activeSourceFilter.value)
   }
-  return certificatesStore.certificates.filter(c => c.status === activeFilter.value)
+
+  // Apply status filter
+  if (activeStatusFilter.value !== 'all') {
+    certs = certs.filter(c => {
+      if (activeStatusFilter.value === 'approved') {
+        return c.status === 'approved' || c.status === 'in_progress'
+      }
+      return c.status === activeStatusFilter.value
+    })
+  }
+
+  return certs
 })
 
 const availableUsers = computed(() => {
   return usersStore.users.filter(u => u.role !== 'admin')
 })
+
+const getEmptyStateMessage = () => {
+  if (activeSourceFilter.value === 'walk-in') {
+    return activeStatusFilter.value === 'all'
+      ? 'No walk-in certificates yet. Add one to get started.'
+      : `No ${activeStatusFilter.value} walk-in certificates.`
+  }
+  if (activeSourceFilter.value === 'mobile-app') {
+    return activeStatusFilter.value === 'all'
+      ? 'No mobile app requests yet. Residents can request via the mobile app.'
+      : `No ${activeStatusFilter.value} mobile app requests.`
+  }
+  return activeStatusFilter.value === 'all'
+    ? 'No certificates found. Add a walk-in certificate or wait for mobile app requests.'
+    : `No ${activeStatusFilter.value} certificates.`
+}
 
 const resetForm = () => {
   formData.value = {
@@ -379,7 +474,9 @@ const closeModal = () => {
   resetForm()
 }
 
-const editCertificate = (certificate: Certificate) => {
+const editCertificate = (certificate: any) => {
+  if (certificate.source !== 'walk-in') return // Only allow editing walk-in certificates
+
   editingCertificate.value = certificate
   formData.value = {
     user_id: certificate.user_id,
@@ -391,23 +488,70 @@ const editCertificate = (certificate: Certificate) => {
   showEditModal.value = true
 }
 
-const confirmDeleteCertificate = (certificate: Certificate) => {
+const confirmDelete = (certificate: any) => {
   certificateToDelete.value = certificate
   showDeleteModal.value = true
 }
 
-const updateCertificateStatus = async (certificate: Certificate, newStatus: string) => {
-  const updates: Partial<Certificate> = {
-    status: newStatus as any
+const viewCertificate = (certificate: any) => {
+  // Open the view/edit modal for the certificate
+  if (certificate.source === 'walk-in') {
+    editCertificate(certificate)
+  } else {
+    // For mobile app requests, show details in a modal or navigate to details page
+    // For now, just edit the certificate
+    editingCertificate.value = certificate
+    formData.value = {
+      user_id: certificate.user_id,
+      certificate_type: certificate.certificate_type,
+      purpose: certificate.purpose,
+      status: certificate.status,
+      notes: certificate.notes || ''
+    }
+    showEditModal.value = true
   }
+}
 
-  if (newStatus === 'approved') {
-    updates.approved_at = new Date().toISOString()
-  } else if (newStatus === 'completed') {
-    updates.completed_at = new Date().toISOString()
+const updateStatus = async (certificate: any, newStatus: string) => {
+  console.log('🔄 Updating certificate status:', {
+    id: certificate.id,
+    source: certificate.source,
+    currentStatus: certificate.status,
+    newStatus: newStatus
+  })
+
+  try {
+    if (certificate.source === 'walk-in') {
+      console.log('📝 Updating walk-in certificate...')
+      const { success, error } = await certificatesStore.updateCertificateStatus(certificate.id, { status: newStatus as any })
+      if (!success) {
+        console.error('❌ Failed to update walk-in certificate:', error)
+        alert(`Failed to update certificate: ${error}`)
+      } else {
+        console.log('✅ Walk-in certificate updated successfully')
+      }
+    } else {
+      // Mobile app requests use different status values
+      // Map 'approved' to 'in_progress' for mobile app requests
+      let mappedStatus = newStatus
+      if (newStatus === 'approved') {
+        mappedStatus = 'in_progress'
+        console.log('📱 Mapping "approved" to "in_progress" for mobile app request')
+      }
+
+      console.log('📱 Updating mobile app request...')
+      const { success, error } = await requestsStore.updateRequestStatus(certificate.id, { status: mappedStatus as any })
+      if (!success) {
+        console.error('❌ Failed to update mobile app request:', error)
+        alert(`Failed to update certificate: ${error}`)
+      } else {
+        console.log('✅ Mobile app request updated successfully')
+      }
+    }
+  } catch (error) {
+    console.error('❌ Exception while updating status:', error)
+    alert(`Error: ${error}`)
   }
-
-  await certificatesStore.updateCertificateStatus(certificate.id, updates)
 }
 
 const handleSubmit = async () => {
@@ -415,19 +559,24 @@ const handleSubmit = async () => {
   formError.value = ''
 
   try {
+    if (!formData.value.user_id || !formData.value.certificate_type || !formData.value.purpose) {
+      formError.value = 'Please fill in all required fields'
+      return
+    }
+
     if (showEditModal.value && editingCertificate.value) {
-      const { success, error } = await certificatesStore.updateCertificateStatus(
+      const { success } = await certificatesStore.updateCertificateStatus(
         editingCertificate.value.id,
         formData.value
       )
       if (!success) {
-        formError.value = error || 'Failed to update certificate'
+        formError.value = 'Failed to update certificate'
         return
       }
     } else {
-      const { success, error } = await certificatesStore.addCertificate(formData.value as any)
+      const { success } = await certificatesStore.addCertificate(formData.value)
       if (!success) {
-        formError.value = error || 'Failed to create certificate'
+        formError.value = 'Failed to create certificate'
         return
       }
     }
@@ -441,17 +590,19 @@ const handleSubmit = async () => {
   }
 }
 
-const handleDeleteCertificate = async () => {
+const handleDelete = async () => {
   if (!certificateToDelete.value) return
 
   formLoading.value = true
 
   try {
-    const { success } = await certificatesStore.removeCertificate(certificateToDelete.value.id)
-    if (success) {
-      showDeleteModal.value = false
-      certificateToDelete.value = null
+    if (certificateToDelete.value.source === 'walk-in') {
+      await certificatesStore.removeCertificate(certificateToDelete.value.id)
+    } else {
+      await requestsStore.removeRequest(certificateToDelete.value.id)
     }
+    showDeleteModal.value = false
+    certificateToDelete.value = null
   } catch (error) {
     console.error('Error deleting certificate:', error)
   } finally {
@@ -463,12 +614,10 @@ const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString()
 }
 
-onMounted(async () => {
-  await Promise.all([
-    certificatesStore.fetchCertificates(),
-    usersStore.fetchUsers()
-  ])
-})
+const formatStatus = (status: string) => {
+  if (status === 'in_progress') return 'In Progress'
+  return status.charAt(0).toUpperCase() + status.slice(1)
+}
 </script>
 
 <style scoped>
@@ -482,7 +631,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
 }
 
 .header-left {
@@ -505,23 +654,17 @@ onMounted(async () => {
   gap: 0.75rem;
 }
 
-.btn-icon {
-  width: 1rem;
-  height: 1rem;
-}
-
-.btn-sm {
-  padding: 0.375rem 0.75rem;
-  font-size: 0.875rem;
-}
-
 .filter-tabs {
   display: flex;
   background-color: white;
   border-radius: 0.5rem;
   padding: 0.25rem;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-  margin-bottom: 1.5rem;
+  margin-bottom: 0;
+}
+
+.secondary-tabs {
+  background-color: #f9fafb;
 }
 
 .filter-tab {
@@ -601,6 +744,7 @@ onMounted(async () => {
 .user-info {
   display: flex;
   flex-direction: column;
+  gap: 0.125rem;
 }
 
 .user-name {
@@ -609,7 +753,7 @@ onMounted(async () => {
 }
 
 .user-email {
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   color: #6b7280;
 }
 
@@ -618,11 +762,89 @@ onMounted(async () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: #6b7280;
 }
 
 .action-buttons {
   display: flex;
   gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.badge-warning {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.badge-info {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.badge-success {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.badge-danger {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.badge-blue {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.badge-purple {
+  background-color: #f3e8ff;
+  color: #6b21a8;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  vertical-align: middle;
+}
+
+.btn-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.btn-sm {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
 }
 
 .text-sm {
@@ -631,5 +853,68 @@ onMounted(async () => {
 
 .text-gray-600 {
   color: #6b7280;
+}
+
+/* Circular Icon-only Buttons */
+.btn-icon-only {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-icon-only svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.btn-icon-success {
+  background-color: #10b981;
+  color: white;
+}
+
+.btn-icon-success:hover {
+  background-color: #059669;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.4);
+}
+
+.btn-icon-primary {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.btn-icon-primary:hover {
+  background-color: #2563eb;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.4);
+}
+
+.btn-icon-info {
+  background-color: #06b6d4;
+  color: white;
+}
+
+.btn-icon-info:hover {
+  background-color: #0891b2;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(6, 182, 212, 0.4);
+}
+
+.btn-icon-danger {
+  background-color: #ef4444;
+  color: white;
+}
+
+.btn-icon-danger:hover {
+  background-color: #dc2626;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(239, 68, 68, 0.4);
 }
 </style>
