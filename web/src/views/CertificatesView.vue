@@ -135,15 +135,27 @@
                   </svg>
                 </button>
 
-                <!-- View/Edit button - always visible -->
+                <!-- View button - always visible -->
                 <button
-                  @click="viewCertificate(certificate)"
+                  @click="viewCertificateReadOnly(certificate)"
                   class="btn-icon-only btn-icon-info"
-                  title="View/Edit certificate"
+                  title="View certificate details"
                 >
                   <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                </button>
+
+                <!-- Edit button - only for walk-in -->
+                <button
+                  v-if="certificate.source === 'walk-in'"
+                  @click="editCertificate(certificate)"
+                  class="btn-icon-only btn-icon-warning"
+                  title="Edit certificate"
+                >
+                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                   </svg>
                 </button>
 
@@ -276,6 +288,98 @@
       </div>
     </div>
 
+    <!-- View Certificate Modal (Read-Only) -->
+    <div v-if="showViewModal && viewingCertificate" class="modal" @click="closeModal">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3 class="modal-title">View Certificate Details</h3>
+        </div>
+
+        <div class="modal-body">
+          <div class="view-grid">
+            <div class="view-row">
+              <span class="view-label">Certificate ID:</span>
+              <span class="view-value">{{ viewingCertificate.id }}</span>
+            </div>
+
+            <div class="view-row">
+              <span class="view-label">Source:</span>
+              <span class="view-value">
+                <span class="badge" :class="viewingCertificate.source === 'walk-in' ? 'badge-info' : 'badge-success'">
+                  {{ viewingCertificate.source === 'walk-in' ? 'Walk-in' : 'Mobile App' }}
+                </span>
+              </span>
+            </div>
+
+            <div class="view-row">
+              <span class="view-label">Resident:</span>
+              <span class="view-value">{{ viewingCertificate.users?.full_name || 'N/A' }}</span>
+            </div>
+
+            <div class="view-row">
+              <span class="view-label">Certificate Type:</span>
+              <span class="view-value">{{ viewingCertificate.certificate_type }}</span>
+            </div>
+
+            <div class="view-row">
+              <span class="view-label">Purpose:</span>
+              <span class="view-value">{{ viewingCertificate.purpose }}</span>
+            </div>
+
+            <div class="view-row">
+              <span class="view-label">Status:</span>
+              <span class="view-value">
+                <span
+                  class="badge"
+                  :class="{
+                    'badge-warning': viewingCertificate.status === 'pending',
+                    'badge-info': viewingCertificate.status === 'approved' || viewingCertificate.status === 'in_progress',
+                    'badge-success': viewingCertificate.status === 'completed',
+                    'badge-danger': viewingCertificate.status === 'rejected'
+                  }"
+                >
+                  {{ formatStatus(viewingCertificate.status) }}
+                </span>
+              </span>
+            </div>
+
+            <div class="view-row">
+              <span class="view-label">Requested At:</span>
+              <span class="view-value">{{ formatDate(viewingCertificate.requested_at) }}</span>
+            </div>
+
+            <div class="view-row" v-if="viewingCertificate.processed_at">
+              <span class="view-label">Processed At:</span>
+              <span class="view-value">{{ formatDate(viewingCertificate.processed_at) }}</span>
+            </div>
+
+            <div class="view-row" v-if="viewingCertificate.notes">
+              <span class="view-label">Notes:</span>
+              <span class="view-value">{{ viewingCertificate.notes }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button
+            @click="closeModal"
+            type="button"
+            class="btn btn-outline"
+          >
+            Close
+          </button>
+          <button
+            v-if="viewingCertificate.source === 'walk-in'"
+            @click="editCertificate(viewingCertificate); showViewModal = false"
+            type="button"
+            class="btn btn-primary"
+          >
+            Edit Certificate
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Delete Confirmation Modal -->
     <div v-if="showDeleteModal" class="modal" @click="showDeleteModal = false">
       <div class="modal-content" @click.stop>
@@ -325,11 +429,13 @@ const usersStore = useUsersStore()
 
 const showAddModal = ref(false)
 const showEditModal = ref(false)
+const showViewModal = ref(false)
 const showDeleteModal = ref(false)
 const formLoading = ref(false)
 const formError = ref('')
 const certificateToDelete = ref<any | null>(null)
 const editingCertificate = ref<Certificate | null>(null)
+const viewingCertificate = ref<any | null>(null)
 const activeSourceFilter = ref('all')
 const activeStatusFilter = ref('all')
 
@@ -470,7 +576,9 @@ const resetForm = () => {
 const closeModal = () => {
   showAddModal.value = false
   showEditModal.value = false
+  showViewModal.value = false
   editingCertificate.value = null
+  viewingCertificate.value = null
   resetForm()
 }
 
@@ -493,23 +601,10 @@ const confirmDelete = (certificate: any) => {
   showDeleteModal.value = true
 }
 
-const viewCertificate = (certificate: any) => {
-  // Open the view/edit modal for the certificate
-  if (certificate.source === 'walk-in') {
-    editCertificate(certificate)
-  } else {
-    // For mobile app requests, show details in a modal or navigate to details page
-    // For now, just edit the certificate
-    editingCertificate.value = certificate
-    formData.value = {
-      user_id: certificate.user_id,
-      certificate_type: certificate.certificate_type,
-      purpose: certificate.purpose,
-      status: certificate.status,
-      notes: certificate.notes || ''
-    }
-    showEditModal.value = true
-  }
+const viewCertificateReadOnly = (certificate: any) => {
+  // Open read-only view modal
+  viewingCertificate.value = certificate
+  showViewModal.value = true
 }
 
 const updateStatus = async (certificate: any, newStatus: string) => {
@@ -916,5 +1011,47 @@ const formatStatus = (status: string) => {
   background-color: #dc2626;
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(239, 68, 68, 0.4);
+}
+
+.btn-icon-warning {
+  background-color: #f59e0b;
+  color: white;
+}
+
+.btn-icon-warning:hover {
+  background-color: #d97706;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(245, 158, 11, 0.4);
+}
+
+/* View Modal Styles */
+.view-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.view-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.view-row:last-child {
+  border-bottom: none;
+}
+
+.view-label {
+  font-weight: 600;
+  color: #374151;
+  min-width: 150px;
+}
+
+.view-value {
+  flex: 1;
+  text-align: right;
+  color: #6b7280;
 }
 </style>
