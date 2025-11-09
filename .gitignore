@@ -124,6 +124,7 @@ web/dist/
 web/.vite/
 
 # Mobile specific (Expo)
+.expo/
 mobile/.expo/
 mobile/dist/
 mobile/build/

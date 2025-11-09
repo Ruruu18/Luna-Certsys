@@ -8,7 +8,6 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "owner": "resare",
-    "projectId": "f1e2d3c4-b5a6-4789-9012-3456789abcde",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -45,7 +44,8 @@
           "color": "#ffffff"
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-font"
     ]
   }
 }
