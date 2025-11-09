@@ -8,6 +8,13 @@ import * as SplashScreen from 'expo-splash-screen';
 import AppNavigator from './src/navigation/AppNavigator';
 import { AuthProvider } from './src/contexts/AuthContext';
 
+// Disable development menu and debug overlays
+if (!__DEV__) {
+  console.log = () => {};
+  console.warn = () => {};
+  console.error = () => {};
+}
+
 SplashScreen.preventAutoHideAsync();
 
 export default function App() {
