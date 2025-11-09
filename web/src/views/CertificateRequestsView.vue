@@ -3,15 +3,15 @@
     <!-- Header -->
     <div class="view-header">
       <div class="header-left">
-        <h2 class="view-title">Certificate Requests</h2>
-        <p class="view-description">Manage certificate requests from mobile app</p>
+        <h2 class="view-title">Mobile App Requests</h2>
+        <p class="view-description">Manage certificate requests submitted by residents via mobile app with payment tracking</p>
       </div>
       <div class="header-right">
         <button @click="showAddModal = true" class="btn btn-primary">
           <svg class="btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
           </svg>
-          Add Request
+          Add Mobile Request
         </button>
       </div>
     </div>
@@ -32,12 +32,7 @@
 
     <!-- Requests Table -->
     <div class="table-container">
-      <div v-if="requestsStore.loading" class="loading">
-        <div class="spinner"></div>
-        <p>Loading certificate requests...</p>
-      </div>
-
-      <div v-else-if="requestsStore.error" class="alert alert-error">
+      <div v-if="requestsStore.error" class="alert alert-error">
         {{ requestsStore.error }}
       </div>
 
@@ -45,9 +40,9 @@
         <svg class="empty-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
-        <h3>No requests found</h3>
-        <p>{{ activeFilter === 'all' ? 'No certificate requests yet' : `No ${activeFilter} requests` }}</p>
-        <button @click="showAddModal = true" class="btn btn-primary">Add Request</button>
+        <h3>No mobile app requests found</h3>
+        <p>{{ activeFilter === 'all' ? 'No mobile app requests yet. Residents can request via the mobile app.' : `No ${activeFilter} mobile requests` }}</p>
+        <button @click="showAddModal = true" class="btn btn-primary">Add Mobile Request</button>
       </div>
 
       <table v-else class="table">
@@ -91,7 +86,7 @@
                   'badge-danger': request.status === 'rejected'
                 }"
               >
-                {{ request.status }}
+                {{ formatStatus(request.status) }}
               </span>
             </td>
             <td>{{ formatDate(request.created_at) }}</td>
@@ -100,50 +95,55 @@
                 <button
                   v-if="request.status === 'pending'"
                   @click="updateRequestStatus(request, 'in_progress')"
-                  class="btn btn-info btn-sm"
+                  class="btn btn-info btn-sm btn-with-text"
                   title="Start processing"
                 >
                   <svg class="btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M19 10a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
+                  <span class="btn-text">Approve</span>
                 </button>
                 <button
                   v-if="request.status === 'in_progress'"
                   @click="updateRequestStatus(request, 'completed')"
-                  class="btn btn-success btn-sm"
+                  class="btn btn-success btn-sm btn-with-text"
                   title="Mark as completed"
                 >
                   <svg class="btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                   </svg>
+                  <span class="btn-text">Complete</span>
                 </button>
                 <button
                   v-if="request.status === 'pending'"
                   @click="updateRequestStatus(request, 'rejected')"
-                  class="btn btn-danger btn-sm"
+                  class="btn btn-danger btn-sm btn-with-text"
                   title="Reject"
                 >
                   <svg class="btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                   </svg>
+                  <span class="btn-text">Reject</span>
                 </button>
                 <button
                   @click="editRequest(request)"
-                  class="btn btn-outline btn-sm"
+                  class="btn btn-outline btn-sm btn-with-text"
                   title="Edit request"
                 >
                   <svg class="btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                   </svg>
+                  <span class="btn-text">Edit</span>
                 </button>
                 <button
                   @click="confirmDeleteRequest(request)"
-                  class="btn btn-danger btn-sm"
+                  class="btn btn-danger btn-sm btn-with-text"
                   title="Delete request"
                 >
                   <svg class="btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
+                  <span class="btn-text">Delete</span>
                 </button>
               </div>
             </td>
@@ -156,7 +156,7 @@
     <div v-if="showAddModal || showEditModal" class="modal" @click="closeModal">
       <div class="modal-content" @click.stop>
         <div class="modal-header">
-          <h3 class="modal-title">{{ showEditModal ? 'Edit Request' : 'Add New Request' }}</h3>
+          <h3 class="modal-title">{{ showEditModal ? 'Edit Mobile App Request' : 'Add New Mobile App Request' }}</h3>
         </div>
 
         <div class="modal-body">
@@ -405,7 +405,7 @@ const editRequest = (request: CertificateRequest) => {
     user_id: request.user_id,
     certificate_type: request.certificate_type,
     purpose: request.purpose,
-    status: request.status,
+    status: request.status as 'pending' | 'in_progress' | 'completed' | 'rejected',
     notes: request.notes || '',
     amount: request.amount || 0
   }
@@ -478,11 +478,17 @@ const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString()
 }
 
-onMounted(async () => {
-  await Promise.all([
-    requestsStore.fetchRequests(),
-    usersStore.fetchUsers()
-  ])
+const formatStatus = (status: string) => {
+  // Convert snake_case to Title Case
+  return status
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+}
+
+onMounted(() => {
+  // ✅ Data is already loaded by AdminLayout
+  console.log('📋 Certificate requests page using cached data from layout')
 })
 </script>
 
@@ -581,8 +587,42 @@ onMounted(async () => {
 .table-container {
   background-color: white;
   border-radius: 0.5rem;
-  overflow: hidden;
+  overflow-x: auto;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  vertical-align: middle;
+}
+
+.table th:last-child {
+  text-align: right;
+  padding-right: 1rem;
+}
+
+.table td:last-child {
+  white-space: nowrap;
+  padding-right: 1rem;
 }
 
 .empty-state {
@@ -641,9 +681,122 @@ onMounted(async () => {
   color: #059669;
 }
 
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.badge-warning {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.badge-info {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.badge-success {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.badge-danger {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
 .action-buttons {
   display: flex;
   gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.action-buttons .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  flex-shrink: 0;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.action-buttons .btn-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+.action-buttons .btn-text {
+  line-height: 1;
+}
+
+.action-buttons .btn-info {
+  background-color: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+.action-buttons .btn-info:hover {
+  background-color: #2563eb;
+  border-color: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+}
+
+.action-buttons .btn-success {
+  background-color: #10b981;
+  color: white;
+  border-color: #10b981;
+}
+
+.action-buttons .btn-success:hover {
+  background-color: #059669;
+  border-color: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+}
+
+.action-buttons .btn-danger {
+  background-color: #ef4444;
+  color: white;
+  border-color: #ef4444;
+}
+
+.action-buttons .btn-danger:hover {
+  background-color: #dc2626;
+  border-color: #dc2626;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+}
+
+.action-buttons .btn-outline {
+  background-color: white;
+  color: #6b7280;
+  border-color: #d1d5db;
+}
+
+.action-buttons .btn-outline:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+  color: #374151;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .text-sm {

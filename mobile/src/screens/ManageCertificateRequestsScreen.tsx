@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -12,6 +11,7 @@ import {
   FlatList,
   Modal,
   TextInput,
+  RefreshControl,
 } from 'react-native';
 import StatusBarWrapper from '../components/StatusBarWrapper';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -19,9 +19,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, CertificateRequest, User } from '../lib/supabase';
+import { dimensions, spacing, fontSize, borderRadius, scale, verticalScale, moderateScale } from '../utils/responsive';
+import { generateCertificatePDF } from '../services/certificateGenerator';
+import { isProfileCompleteForCertificate } from '../types/user';
 
 interface ManageCertificateRequestsScreenProps {
-  navigation: any;
+  navigation: import('../types/navigation').AppNavigationProp;
 }
 
 interface CertificateRequestWithUser extends CertificateRequest {
@@ -32,6 +35,7 @@ export default function ManageCertificateRequestsScreen({ navigation }: ManageCe
   const { user } = useAuth();
   const [requests, setRequests] = useState<CertificateRequestWithUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<CertificateRequestWithUser | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
@@ -45,9 +49,41 @@ export default function ManageCertificateRequestsScreen({ navigation }: ManageCe
     }
   }, [user, filter]);
 
-  const fetchCertificateRequests = async () => {
+  // Set up Supabase Realtime subscription for admin real-time updates
+  useEffect(() => {
+    if (user?.role !== 'purok_chairman') return;
+
+    const channel = supabase
+      .channel('admin_certificate_requests_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'certificate_requests',
+        },
+        (payload) => {
+          console.log('Admin real-time update received:', payload);
+
+          // Refresh the requests list when any change occurs
+          fetchCertificateRequests();
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, filter]);
+
+  const fetchCertificateRequests = async (isRefreshing = false) => {
     try {
-      setLoading(true);
+      if (isRefreshing) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       
       // First get all residents under this chairman
       const { data: residents, error: residentsError } = await supabase
@@ -86,10 +122,17 @@ export default function ManageCertificateRequestsScreen({ navigation }: ManageCe
       setRequests(data || []);
     } catch (error) {
       console.error('Error fetching certificate requests:', error);
-      Alert.alert('Error', 'Failed to load certificate requests');
+      if (!isRefreshing) {
+        Alert.alert('Error', 'Failed to load certificate requests');
+      }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const handleRefresh = () => {
+    fetchCertificateRequests(true);
   };
 
   const handleUpdateRequestStatus = async (newStatus: 'in_progress' | 'completed' | 'rejected') => {
@@ -97,43 +140,121 @@ export default function ManageCertificateRequestsScreen({ navigation }: ManageCe
 
     setIsSubmitting(true);
     try {
-      const updateData: any = {
-        status: newStatus,
-        updated_at: new Date().toISOString(),
-        processed_by: user?.id,
-      };
-
-      if (notes.trim()) {
-        updateData.notes = notes.trim();
-      }
-
+      // If completing the request, validate user profile first
       if (newStatus === 'completed') {
-        updateData.completed_at = new Date().toISOString();
-      }
+        const { isComplete, missingFields } = isProfileCompleteForCertificate(selectedRequest.user as any);
 
-      const { error } = await supabase
-        .from('certificate_requests')
-        .update(updateData)
-        .eq('id', selectedRequest.id);
+        if (!isComplete) {
+          Alert.alert(
+            'Incomplete Profile',
+            `Cannot generate certificate. User profile is missing:\n\n${missingFields.join('\n')}\n\nPlease ask the user to complete their profile first.`,
+            [
+              {
+                text: 'Set as In Progress Instead',
+                onPress: async () => {
+                  await handleUpdateRequestStatus('in_progress');
+                },
+              },
+              {
+                text: 'Cancel',
+                style: 'cancel',
+              },
+            ]
+          );
+          setIsSubmitting(false);
+          return;
+        }
 
-      if (error) throw error;
+        // Generate PDF before updating status
+        Alert.alert(
+          'Generating Certificate',
+          'Please wait while we generate the certificate PDF...',
+          [],
+          { cancelable: false }
+        );
 
-      Alert.alert(
-        'Success',
-        `Certificate request has been ${newStatus === 'in_progress' ? 'approved and is now in progress' : newStatus}.`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              setModalVisible(false);
-              setSelectedRequest(null);
-              setNotes('');
-              setActionType(null);
-              fetchCertificateRequests();
+        const pdfResult = await generateCertificatePDF({
+          requestId: selectedRequest.id,
+          userId: selectedRequest.user_id,
+          certificateType: selectedRequest.certificate_type,
+          purpose: selectedRequest.purpose,
+        });
+
+        if (!pdfResult.success) {
+          Alert.alert(
+            'PDF Generation Failed',
+            pdfResult.error || 'Failed to generate certificate. Please try again.',
+            [
+              {
+                text: 'Set as In Progress Instead',
+                onPress: async () => {
+                  await handleUpdateRequestStatus('in_progress');
+                },
+              },
+              {
+                text: 'Cancel',
+                style: 'cancel',
+              },
+            ]
+          );
+          setIsSubmitting(false);
+          return;
+        }
+
+        // PDF generated successfully by the generator service
+        // Status and PDF URL already updated in the database
+        Alert.alert(
+          'Success',
+          `Certificate generated successfully!\n\nCertificate Number: ${pdfResult.certificateNumber}`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                setModalVisible(false);
+                setSelectedRequest(null);
+                setNotes('');
+                setActionType(null);
+                fetchCertificateRequests();
+              },
             },
-          },
-        ]
-      );
+          ]
+        );
+      } else {
+        // For other statuses (in_progress, rejected), just update normally
+        const updateData: any = {
+          status: newStatus,
+          updated_at: new Date().toISOString(),
+          processed_by: user?.id,
+        };
+
+        if (notes.trim()) {
+          updateData.notes = notes.trim();
+        }
+
+        const { error } = await supabase
+          .from('certificate_requests')
+          .update(updateData)
+          .eq('id', selectedRequest.id);
+
+        if (error) throw error;
+
+        Alert.alert(
+          'Success',
+          `Certificate request has been ${newStatus === 'in_progress' ? 'approved and is now in progress' : newStatus}.`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                setModalVisible(false);
+                setSelectedRequest(null);
+                setNotes('');
+                setActionType(null);
+                fetchCertificateRequests();
+              },
+            },
+          ]
+        );
+      }
     } catch (error) {
       console.error('Error updating request:', error);
       Alert.alert('Error', 'Failed to update request status');
@@ -178,6 +299,21 @@ export default function ManageCertificateRequestsScreen({ navigation }: ManageCe
     }
   };
 
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return 'Pending';
+      case 'in_progress':
+        return 'In Progress';
+      case 'completed':
+        return 'Completed';
+      case 'rejected':
+        return 'Rejected';
+      default:
+        return status.charAt(0).toUpperCase() + status.slice(1);
+    }
+  };
+
   const renderRequest = ({ item }: { item: CertificateRequestWithUser }) => (
     <View style={styles.requestCard}>
       <View style={styles.requestHeader}>
@@ -188,7 +324,7 @@ export default function ManageCertificateRequestsScreen({ navigation }: ManageCe
         <View style={[styles.statusContainer, { backgroundColor: getStatusColor(item.status) + '15' }]}>
           <Ionicons name={getStatusIcon(item.status) as any} size={16} color={getStatusColor(item.status)} />
           <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-            {item.status.charAt(0).toUpperCase() + item.status.slice(1).replace('_', ' ')}
+            {getStatusLabel(item.status)}
           </Text>
         </View>
       </View>
@@ -199,6 +335,39 @@ export default function ManageCertificateRequestsScreen({ navigation }: ManageCe
         {item.amount && (
           <Text style={styles.amount}>Amount: ₱{item.amount}</Text>
         )}
+
+        {/* Payment Status Badge */}
+        {item.payment_status && (
+          <View style={[styles.paymentBadge, {
+            backgroundColor: item.payment_status === 'paid'
+              ? theme.colors.success + '15'
+              : item.payment_status === 'failed'
+              ? theme.colors.error + '15'
+              : theme.colors.warning + '15'
+          }]}>
+            <Ionicons
+              name={item.payment_status === 'paid' ? 'checkmark-circle' : 'card-outline'}
+              size={14}
+              color={
+                item.payment_status === 'paid'
+                  ? theme.colors.success
+                  : item.payment_status === 'failed'
+                  ? theme.colors.error
+                  : theme.colors.warning
+              }
+            />
+            <Text style={[styles.paymentBadgeText, {
+              color: item.payment_status === 'paid'
+                ? theme.colors.success
+                : item.payment_status === 'failed'
+                ? theme.colors.error
+                : theme.colors.warning
+            }]}>
+              Payment: {item.payment_status.charAt(0).toUpperCase() + item.payment_status.slice(1)}
+            </Text>
+          </View>
+        )}
+
         <Text style={styles.requestDate}>
           Requested: {new Date(item.created_at).toLocaleDateString()}
         </Text>
@@ -279,15 +448,17 @@ export default function ManageCertificateRequestsScreen({ navigation }: ManageCe
         end={{ x: 1, y: 1 }}
       >
         <View style={styles.headerContent}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Ionicons name="arrow-back" size={24} color="white" />
+            <Ionicons name="arrow-back" size={moderateScale(24)} color="white" />
           </TouchableOpacity>
-          
-          <Text style={styles.title}>Certificate Requests</Text>
-          
+
+          <View style={styles.headerCenter}>
+            <Text style={styles.title}>Certificate Requests</Text>
+          </View>
+
           <View style={styles.headerRight} />
         </View>
       </LinearGradient>
@@ -318,9 +489,9 @@ export default function ManageCertificateRequestsScreen({ navigation }: ManageCe
             <Ionicons name="document-text-outline" size={64} color={theme.colors.textTertiary} />
             <Text style={styles.emptyText}>No certificate requests found</Text>
             <Text style={styles.emptySubtext}>
-              {filter === 'all' 
+              {filter === 'all'
                 ? 'Your residents haven\'t submitted any certificate requests yet'
-                : `No ${filter === 'in_progress' ? 'in progress' : filter} requests found`
+                : `No ${getStatusLabel(filter).toLowerCase()} requests found`
               }
             </Text>
           </View>
@@ -331,6 +502,14 @@ export default function ManageCertificateRequestsScreen({ navigation }: ManageCe
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContainer}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                colors={[theme.colors.primary]}
+                tintColor={theme.colors.primary}
+              />
+            }
           />
         )}
       </View>
@@ -413,55 +592,76 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   header: {
-    paddingTop: theme.spacing.md,
-    paddingBottom: theme.spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.lg,
+    paddingHorizontal: spacing.lg,
   },
   backButton: {
-    padding: theme.spacing.sm,
+    width: moderateScale(40),
+    height: moderateScale(40),
+    borderRadius: moderateScale(20),
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: spacing.md,
   },
   title: {
-    fontSize: theme.fontSize.xl,
+    fontSize: fontSize.lg,
     fontWeight: theme.fontWeight.bold,
+    fontFamily: theme.fontFamily.bold,
     color: 'white',
+    textAlign: 'center',
   },
   headerRight: {
-    width: 40,
+    width: moderateScale(40),
   },
   filterContainer: {
     backgroundColor: theme.colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
+    maxHeight: verticalScale(60),
   },
   filterContent: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+    alignItems: 'center',
   },
   filterButton: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
-    marginRight: theme.spacing.sm,
-    borderRadius: theme.borderRadius.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
     backgroundColor: theme.colors.background,
     borderWidth: 1,
     borderColor: theme.colors.border,
+    height: verticalScale(32),
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   activeFilterButton: {
     backgroundColor: theme.colors.primary,
     borderColor: theme.colors.primary,
   },
   filterButtonText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: fontSize.sm,
     color: theme.colors.textSecondary,
     fontWeight: theme.fontWeight.medium,
+    fontFamily: theme.fontFamily.medium,
   },
   activeFilterButtonText: {
     color: 'white',
+    fontWeight: theme.fontWeight.semibold,
+    fontFamily: theme.fontFamily.semiBold,
   },
   content: {
     flex: 1,
@@ -572,6 +772,21 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     color: theme.colors.textSecondary,
     fontStyle: 'italic',
+  },
+  paymentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    alignSelf: 'flex-start',
+    marginVertical: spacing.xs,
+  },
+  paymentBadgeText: {
+    fontSize: fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
+    fontFamily: theme.fontFamily.medium,
+    marginLeft: spacing.xs,
   },
   actionButtons: {
     flexDirection: 'row',

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React from 'react';
 import {
   View,
@@ -8,18 +7,16 @@ import {
   Image,
   Linking,
   Alert,
-  Dimensions,
 } from 'react-native';
 import { DrawerContentScrollView } from '@react-navigation/drawer';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { theme } from '../styles/theme';
 import { useAuth } from '../contexts/AuthContext';
-
-const { height: screenHeight } = Dimensions.get('window');
+import { dimensions, spacing, fontSize, borderRadius, scale, verticalScale, moderateScale } from '../utils/responsive';
 
 interface CustomDrawerContentProps {
-  navigation: any;
+  navigation: import('../types/navigation').AppNavigationProp;
 }
 
 interface MenuItem {
@@ -36,7 +33,7 @@ interface ContactItem {
 }
 
 export default function CustomDrawerContent({ navigation }: CustomDrawerContentProps) {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
 
   // Different menu items based on user role
   const getMenuItems = (): MenuItem[] => {
@@ -52,6 +49,12 @@ export default function CustomDrawerContent({ navigation }: CustomDrawerContentP
         label: 'Profile',
         color: theme.colors.info,
         onPress: () => navigation.navigate('Profile'),
+      },
+      {
+        icon: 'map-outline',
+        label: 'Barangay Map',
+        color: '#10b981',
+        onPress: () => navigation.navigate('Map'),
       },
     ];
 
@@ -69,13 +72,7 @@ export default function CustomDrawerContent({ navigation }: CustomDrawerContentP
           icon: 'document-text-outline',
           label: 'Certificate Requests',
           color: theme.colors.warning,
-          onPress: () => navigation.navigate('ManageCertificateRequests'),
-        },
-        {
-          icon: 'notifications-outline',
-          label: 'Notifications',
-          color: theme.colors.error,
-          onPress: () => navigation.navigate('Notifications'),
+          onPress: () => navigation.navigate('CertificateRequests'),
         },
       ];
     } else {
@@ -99,12 +96,6 @@ export default function CustomDrawerContent({ navigation }: CustomDrawerContentP
           label: 'Transactions',
           color: theme.colors.secondary,
           onPress: () => navigation.navigate('Transaction'),
-        },
-        {
-          icon: 'notifications-outline',
-          label: 'Notifications',
-          color: theme.colors.error,
-          onPress: () => navigation.navigate('Notifications'),
         },
       ];
     }
@@ -151,20 +142,58 @@ export default function CustomDrawerContent({ navigation }: CustomDrawerContentP
     });
   };
 
-  const renderMenuItem = (item: MenuItem, index: number) => (
-    <TouchableOpacity
-      key={index}
-      style={styles.menuItem}
-      onPress={item.onPress}
-      activeOpacity={0.7}
-    >
-      <View style={[styles.menuIconContainer, { backgroundColor: item.color + '15' }]}>
-        <Ionicons name={item.icon as any} size={22} color={item.color} />
-      </View>
-      <Text style={styles.menuLabel}>{item.label}</Text>
-      <Ionicons name="chevron-forward" size={16} color={theme.colors.textTertiary} />
-    </TouchableOpacity>
-  );
+  const handleLogout = async () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('Logging out...');
+              await signOut();
+              console.log('Logout successful');
+            } catch (error) {
+              console.error('Error signing out:', error);
+              Alert.alert('Error', 'Failed to logout. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const renderMenuItem = (item: MenuItem, index: number) => {
+    const iconSize = dimensions.width < 360 ? moderateScale(19) : moderateScale(21);
+    const chevronSize = dimensions.width < 360 ? moderateScale(15) : moderateScale(17);
+
+    return (
+      <TouchableOpacity
+        key={index}
+        style={styles.menuItem}
+        onPress={item.onPress}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.menuIconContainer, { backgroundColor: item.color + '25' }]}>
+          <Ionicons name={item.icon as any} size={iconSize} color={item.color} />
+        </View>
+        <Text
+          style={styles.menuLabel}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
+          {item.label}
+        </Text>
+        <Ionicons name="chevron-forward" size={chevronSize} color={theme.colors.textSecondary} style={styles.chevronIcon} />
+      </TouchableOpacity>
+    );
+  };
 
   const renderContactItem = (item: ContactItem, index: number) => (
     <TouchableOpacity
@@ -173,7 +202,7 @@ export default function CustomDrawerContent({ navigation }: CustomDrawerContentP
       onPress={item.onPress}
       activeOpacity={0.7}
     >
-      <Ionicons name={item.icon as any} size={18} color={theme.colors.primary} />
+      <Ionicons name={item.icon as any} size={moderateScale(20)} color={theme.colors.primary} />
       <Text style={styles.contactText}>{item.text}</Text>
     </TouchableOpacity>
   );
@@ -194,8 +223,6 @@ export default function CustomDrawerContent({ navigation }: CustomDrawerContentP
             resizeMode="contain"
           />
         </View>
-        <Text style={styles.appName}>Luna Certsys</Text>
-        <Text style={styles.appSubtitle}>Barangay Luna, Surigao City</Text>
       </LinearGradient>
 
       <DrawerContentScrollView
@@ -217,10 +244,20 @@ export default function CustomDrawerContent({ navigation }: CustomDrawerContentP
         </View>
       </DrawerContentScrollView>
 
+      {/* Logout Button */}
+      <TouchableOpacity
+        style={styles.logoutButton}
+        onPress={handleLogout}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="log-out-outline" size={moderateScale(22)} color={theme.colors.error} />
+        <Text style={styles.logoutText}>Logout</Text>
+      </TouchableOpacity>
+
       {/* Footer */}
       <View style={styles.footer}>
         <Text style={styles.footerText}>v1.0.0</Text>
-        <Text style={styles.footerSubtext}>© 2024 Barangay Luna</Text>
+        <Text style={styles.footerSubtext}>© {new Date().getFullYear()} Barangay Luna</Text>
       </View>
     </View>
   );
@@ -232,108 +269,133 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
   },
   header: {
-    paddingTop: theme.spacing.xl + 10,
-    paddingBottom: theme.spacing.lg,
-    paddingHorizontal: theme.spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: 0,
+    paddingHorizontal: spacing.md,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   logoContainer: {
-    marginBottom: theme.spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
   logo: {
-    width: 180,
-    height: 180,
-  },
-  appName: {
-    fontSize: theme.fontSize.xl,
-    fontWeight: theme.fontWeight.bold,
-    color: 'white',
-    marginBottom: theme.spacing.xs,
-    textAlign: 'center',
-  },
-  appSubtitle: {
-    fontSize: theme.fontSize.sm,
-    color: 'rgba(255, 255, 255, 0.9)',
-    textAlign: 'center',
-    lineHeight: 18,
+    width: dimensions.width < 360 ? scale(180) : scale(200),
+    height: dimensions.width < 360 ? verticalScale(180) : verticalScale(200),
+    maxWidth: dimensions.width * 0.65,
+    maxHeight: verticalScale(200),
   },
   scrollContent: {
     flexGrow: 1,
-    paddingTop: theme.spacing.md,
+    paddingTop: spacing.lg,
   },
   menuContainer: {
-    paddingHorizontal: theme.spacing.sm,
+    paddingHorizontal: spacing.md,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
-    marginBottom: theme.spacing.xs,
-    borderRadius: theme.borderRadius.md,
+    paddingVertical: verticalScale(10),
+    paddingHorizontal: scale(8),
+    marginBottom: verticalScale(4),
+    borderRadius: borderRadius.md,
     backgroundColor: 'transparent',
+    minHeight: verticalScale(48),
   },
   menuIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: dimensions.width < 360 ? moderateScale(34) : moderateScale(38),
+    height: dimensions.width < 360 ? moderateScale(34) : moderateScale(38),
+    borderRadius: dimensions.width < 360 ? moderateScale(17) : moderateScale(19),
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: theme.spacing.md,
+    marginRight: dimensions.width < 360 ? scale(8) : scale(10),
+    flexShrink: 0,
   },
   menuLabel: {
     flex: 1,
-    fontSize: theme.fontSize.md,
+    fontSize: dimensions.width < 360 ? moderateScale(13) : moderateScale(14.5),
     color: theme.colors.text,
-    fontWeight: theme.fontWeight.medium,
+    fontWeight: theme.fontWeight.semibold,
+    fontFamily: theme.fontFamily.semiBold,
+    letterSpacing: -0.2,
+    lineHeight: dimensions.width < 360 ? moderateScale(16) : moderateScale(18),
+  },
+  chevronIcon: {
+    alignSelf: 'center',
+    marginLeft: scale(4),
+    flexShrink: 0,
   },
   divider: {
     height: 1,
     backgroundColor: theme.colors.border,
-    marginVertical: theme.spacing.lg,
-    marginHorizontal: theme.spacing.lg,
+    marginVertical: spacing.xl,
+    marginHorizontal: spacing.xl,
+    opacity: 0.5,
   },
   contactSection: {
-    paddingHorizontal: theme.spacing.lg,
-    marginBottom: theme.spacing.lg,
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.xl,
   },
   contactTitle: {
-    fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.semibold,
+    fontSize: fontSize.md,
+    fontWeight: theme.fontWeight.bold,
+    fontFamily: theme.fontFamily.bold,
     color: theme.colors.text,
-    marginBottom: theme.spacing.md,
+    marginBottom: spacing.md,
+    letterSpacing: 0.3,
   },
   contactItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.sm,
-    marginBottom: theme.spacing.xs,
-    borderRadius: theme.borderRadius.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    marginBottom: spacing.xs,
+    borderRadius: borderRadius.md,
   },
   contactText: {
-    marginLeft: theme.spacing.sm,
-    fontSize: theme.fontSize.sm,
+    marginLeft: spacing.md,
+    fontSize: fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
     color: theme.colors.textSecondary,
     flex: 1,
   },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: spacing.lg,
+    marginVertical: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: theme.colors.error + '10',
+    borderWidth: 1,
+    borderColor: theme.colors.error + '30',
+  },
+  logoutText: {
+    marginLeft: spacing.sm,
+    fontSize: fontSize.md,
+    fontWeight: theme.fontWeight.semibold,
+    fontFamily: theme.fontFamily.semiBold,
+    color: theme.colors.error,
+  },
   footer: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
     alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.02)',
   },
   footerText: {
-    fontSize: theme.fontSize.xs,
-    color: theme.colors.textTertiary,
-    fontWeight: theme.fontWeight.medium,
+    fontSize: fontSize.sm,
+    color: theme.colors.textSecondary,
+    fontWeight: theme.fontWeight.semibold,
+    fontFamily: theme.fontFamily.semiBold,
   },
   footerSubtext: {
-    fontSize: theme.fontSize.xs,
-    color: theme.colors.textTertiary,
-    marginTop: theme.spacing.xs,
+    fontSize: fontSize.xs,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.textSecondary,
+    marginTop: spacing.xs,
   },
 });

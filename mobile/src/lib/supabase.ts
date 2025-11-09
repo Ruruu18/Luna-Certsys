@@ -3,64 +3,15 @@ import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 
-// React Native network debugging
-console.log('Initializing Supabase client...');
-console.log('Platform:', typeof navigator !== 'undefined' ? navigator.userAgent : 'Node.js');
-console.log('Global fetch available:', typeof global.fetch !== 'undefined');
-console.log('Fetch available:', typeof fetch !== 'undefined');
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-// Enhanced fetch wrapper for React Native
-const createRobustFetch = () => {
-  return async (url, options = {}) => {
-    console.log('🌐 Robust fetch request to:', url);
-    console.log('🔧 Request options:', {
-      method: options.method || 'GET',
-      headers: options.headers ? Object.keys(options.headers) : 'none'
-    });
-    
-    // Add timeout and better error handling
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-    
-    try {
-      const enhancedOptions = {
-        ...options,
-        signal: controller.signal,
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          ...options.headers
-        }
-      };
-      
-      const response = await fetch(url, enhancedOptions);
-      clearTimeout(timeoutId);
-      
-      console.log('✅ Response received:', response.status, response.statusText);
-      return response;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      console.error('❌ Robust fetch error:', {
-        message: error.message,
-        name: error.name,
-        url: url,
-        method: options.method || 'GET'
-      });
-      
-      // Provide more specific error information
-      if (error.name === 'AbortError') {
-        throw new Error('Request timeout - please check your internet connection');
-      } else if (error.message === 'Network request failed') {
-        throw new Error('Network connection failed - please check your internet connection and try again');
-      }
-      
-      throw error;
-    }
-  };
-};
-
-const supabaseUrl = 'https://xxwenpzultmevzolfiby.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4d2VucHp1bHRtZXZ6b2xmaWJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY0MjAzOTUsImV4cCI6MjA3MTk5NjM5NX0.WsgdtpgIwQ1HohRZtGCrZbRpRIIxAU1AUx0ObQtpsp0';
+// Validate environment variables
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    'Missing Supabase environment variables. Please create a .env file with EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY'
+  );
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -68,40 +19,73 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+    storageKey: 'supabase.auth.token',
   },
 });
 
-// Test connection on startup
-console.log('Mobile Supabase client initialized with URL:', supabaseUrl);
+// Listen for auth state changes and handle refresh token errors silently
+supabase.auth.onAuthStateChange(async (event, session) => {
+  // Silently handle sign-out and token refresh
+  if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+    if (!session) {
+      // Session cleared or refresh failed - handled silently
+    }
+  }
+});
 
-// Add connection test for mobile with RLS awareness
-async function testMobileConnection() {
+// Clear invalid sessions on startup silently
+async function initializeAuth() {
   try {
-    // Test basic connection without auth first
-    const { data: healthCheck } = await supabase.from('users').select('count').limit(1);
-    if (healthCheck && healthCheck.length === 0) {
-      console.log('Mobile Supabase connection test: SUCCESS (RLS protecting data as expected)');
-    } else {
-      console.log('Mobile Supabase connection test: SUCCESS');
+    const { data: { session }, error } = await supabase.auth.getSession();
+
+    if (error) {
+      // If there's an error getting the session (like invalid refresh token), clear it silently
+      await supabase.auth.signOut();
+      await AsyncStorage.removeItem('supabase.auth.token');
     }
   } catch (error) {
-    console.error('Mobile Supabase connection test failed:', error);
+    // Clear storage silently on error
+    await AsyncStorage.removeItem('supabase.auth.token');
   }
 }
-testMobileConnection();
+initializeAuth();
 
 // Database types
 export interface User {
   id: string;
   email: string;
-  full_name: string;
+
+  // Name fields (NEW - separated for certificates)
+  first_name: string;
+  last_name: string;
+  middle_name?: string;
+  suffix?: string;
+  full_name: string; // Computed from first_name + middle_name + last_name + suffix
+
+  // Account info
   role: 'admin' | 'purok_chairman' | 'resident';
   purok?: string;
   phone_number?: string;
   address?: string;
+
+  // Personal details (for certificates)
+  date_of_birth?: string;
+  place_of_birth?: string;
+  gender?: 'Male' | 'Female' | 'Other';
+  civil_status?: 'Single' | 'Married' | 'Widowed' | 'Divorced' | 'Separated';
+  age?: number;
+  nationality?: string;
+
+  // Face verification (NEW)
+  photo_url?: string; // Face photo from verification (auto-captured, read-only)
+  face_verified: boolean;
+  face_verified_at?: string;
+
+  // System fields
   created_at: string;
   updated_at: string;
   purok_chairman_id?: string; // For residents, links to their purok chairman
+  push_token?: string; // For push notifications
 }
 
 export interface Certificate {
@@ -128,7 +112,34 @@ export interface CertificateRequest {
   notes?: string;
   amount?: number;
   processed_by?: string;
+  payment_status?: 'pending' | 'paid' | 'failed' | 'refunded';
+  payment_method?: string;
+  payment_reference?: string;
+  payment_date?: string;
+  payment_amount?: number;
+  pdf_url?: string;
+  pdf_generated_at?: string;
+  certificate_number?: string;
 }
+
+// Utility function to handle auth errors, especially refresh token issues
+export const handleAuthError = async (error: any) => {
+  if (error?.message?.includes('refresh') ||
+      error?.message?.includes('Invalid Refresh Token') ||
+      error?.message?.includes('Refresh Token Not Found')) {
+
+    try {
+      // Clear the session from storage silently
+      await supabase.auth.signOut();
+    } catch (signOutError) {
+      // Handle silently
+    }
+
+    return { shouldReauth: true, error };
+  }
+
+  return { shouldReauth: false, error };
+};
 
 // Auth helpers
 export const signUp = async (email: string, password: string, userData: Partial<User>) => {
@@ -143,11 +154,22 @@ export const signUp = async (email: string, password: string, userData: Partial<
 };
 
 export const signIn = async (email: string, password: string) => {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
-  return { data, error };
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      const { shouldReauth } = await handleAuthError(error);
+      return { data, error, shouldReauth };
+    }
+
+    return { data, error: null, shouldReauth: false };
+  } catch (exception) {
+    const { shouldReauth } = await handleAuthError(exception);
+    return { data: null, error: exception, shouldReauth };
+  }
 };
 
 export const signOut = async () => {
@@ -156,16 +178,56 @@ export const signOut = async () => {
 };
 
 export const getCurrentUser = async () => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (user) {
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', user.id)
-      .single();
-    return userProfile;
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error) {
+      const { shouldReauth } = await handleAuthError(error);
+      if (shouldReauth) {
+        return null;
+      }
+      throw error;
+    }
+    return user;
+  } catch (error) {
+    return null;
   }
-  return null;
+};
+
+// Function to check session health and refresh if needed
+export const checkAndRefreshSession = async () => {
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession();
+
+    if (error) {
+      await handleAuthError(error);
+      return null;
+    }
+
+    if (!session) {
+      return null;
+    }
+
+    // Check if token is close to expiry (within 5 minutes)
+    const expiresAt = session.expires_at;
+    const now = Math.floor(Date.now() / 1000);
+    const timeUntilExpiry = expiresAt - now;
+
+    if (timeUntilExpiry < 300) { // Less than 5 minutes
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+
+      if (refreshError) {
+        await handleAuthError(refreshError);
+        return null;
+      }
+
+      return refreshData.session;
+    }
+
+    return session;
+  } catch (error) {
+    await handleAuthError(error);
+    return null;
+  }
 };
 
 // Database helpers
@@ -191,6 +253,15 @@ export const updateUserProfile = async (userId: string, updates: Partial<User>) 
 export const getCertificates = async (userId: string) => {
   const { data, error } = await supabase
     .from('certificates')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  return { data, error };
+};
+
+export const getCertificateRequests = async (userId: string) => {
+  const { data, error } = await supabase
+    .from('certificate_requests')
     .select('*')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });

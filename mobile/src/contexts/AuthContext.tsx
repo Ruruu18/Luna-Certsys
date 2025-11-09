@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase, User, getCurrentUser } from '../lib/supabase';
+import { supabase, User, getCurrentUser, checkAndRefreshSession, handleAuthError as handleAuthErrorUtil } from '../lib/supabase';
 import { Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -10,6 +10,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, userData: Partial<User>) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  handleAuthError: (error: any) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -32,20 +33,42 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session?.user) {
-        loadUserProfile(session.user.id);
-      } else {
+    // Get initial session with error handling
+    const initializeAuth = async () => {
+      try {
+        const session = await checkAndRefreshSession();
+        setSession(session);
+        if (session?.user) {
+          await loadUserProfile(session.user.id);
+        } else {
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+        await handleAuthErrorUtil(error);
         setLoading(false);
       }
-    });
+    };
+    
+    initializeAuth();
 
     // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state change event:', event, session?.user?.id);
+      
+      // Handle specific auth events
+      if (event === 'TOKEN_REFRESHED') {
+        console.log('✅ Token refreshed successfully');
+      } else if (event === 'SIGNED_OUT') {
+        console.log('User signed out');
+        setUser(null);
+        setSession(null);
+        setLoading(false);
+        return;
+      }
+      
       setSession(session);
       if (session?.user) {
         await loadUserProfile(session.user.id);
@@ -104,22 +127,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             setUser(emailProfile);
           } else {
             console.error('Email fallback also failed:', emailError);
-            // For admin, create a temporary profile to prevent login issues
-            if (authUser.email === 'admin@resare.com') {
-              console.log('Creating temporary admin profile...');
-              const tempProfile: User = {
-                id: userId,
-                email: authUser.email,
-                full_name: 'System Administrator',
-                role: 'admin',
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              };
-              setUser(tempProfile);
-            } else {
-              console.error('❌ User profile not found - user may need to be created in database');
-              setUser(null);
-            }
+            console.error('❌ User profile not found - user may need to be created in database');
+            setUser(null);
           }
         }
       } catch (dbError) {
@@ -203,6 +212,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const handleAuthError = async (error: any) => {
+    const { shouldReauth } = await handleAuthErrorUtil(error);
+    
+    if (shouldReauth) {
+      // Clear local state when reauth is needed
+      setUser(null);
+      setSession(null);
+      setLoading(false);
+      console.log('✅ Local auth state cleared due to token error');
+    }
+  };
+
   const value: AuthContextType = {
     user,
     session,
@@ -211,6 +232,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     signUp,
     signOut,
     refreshUser,
+    handleAuthError,
   };
 
   return (

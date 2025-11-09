@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -10,16 +9,21 @@ import {
   FlatList,
   SafeAreaView,
   ActivityIndicator,
+  Alert,
+  RefreshControl,
 } from 'react-native';
 import StatusBarWrapper from '../components/StatusBarWrapper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { useAuth } from '../contexts/AuthContext';
-import { getCertificates, CertificateRequest } from '../lib/supabase';
+import { getCertificateRequests, CertificateRequest, supabase } from '../lib/supabase';
+import { dimensions, spacing, fontSize, borderRadius, scale, verticalScale, moderateScale } from '../utils/responsive';
+import { generateCertificatePDF } from '../services/certificateGenerator';
+import { downloadCertificate } from '../services/storageService';
 
 interface TrackRequestScreenProps {
-  navigation: any;
+  navigation: import('../types/navigation').AppNavigationProp;
 }
 
 interface Request {
@@ -41,82 +45,159 @@ export default function TrackRequestScreen({ navigation }: TrackRequestScreenPro
   const [selectedStatus, setSelectedStatus] = useState('All');
   const [requests, setRequests] = useState<CertificateRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchUserRequests();
+
+    // Set up Supabase Realtime subscription for real-time updates
+    if (!user) return;
+
+    const channel = supabase
+      .channel('certificate_requests_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'certificate_requests',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          console.log('Real-time update received:', payload);
+
+          // Refresh the requests list when any change occurs
+          fetchUserRequests(true);
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user]);
 
-  const fetchUserRequests = async () => {
-    if (!user) return;
-    
+  const fetchUserRequests = async (isRefreshing = false) => {
+    if (!user) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     try {
-      setLoading(true);
-      const { data, error } = await getCertificates(user.id);
-      
-      if (error) {
-        console.error('Error fetching certificates:', error);
+      if (isRefreshing) {
+        setRefreshing(true);
       } else {
+        setLoading(true);
+      }
+
+      // Add timeout to prevent infinite loading (15 seconds)
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Request timeout')), 15000)
+      );
+
+      const fetchPromise = getCertificateRequests(user.id);
+
+      const { data, error } = await Promise.race([
+        fetchPromise,
+        timeoutPromise
+      ]) as any;
+
+      if (error) {
+        console.error('Error fetching certificate requests:', error);
+        if (!isRefreshing) {
+          Alert.alert('Error', 'Failed to load requests. Please try again.');
+        }
+      } else {
+        console.log('Fetched certificate requests:', data);
         setRequests(data || []);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Unexpected error:', error);
+      if (error.message === 'Request timeout') {
+        if (!isRefreshing) {
+          Alert.alert('Timeout', 'Loading is taking too long. Please check your connection and try again.');
+        }
+      } else {
+        if (!isRefreshing) {
+          Alert.alert('Error', 'Failed to load requests. Please try again.');
+        }
+      }
+      setRequests([]); // Clear requests on error
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const mockRequests: Request[] = [
-    {
-      id: '1',
-      referenceNumber: 'REF-2024-001',
-      certificateType: 'Barangay Clearance',
-      status: 'Ready',
-      dateSubmitted: '2024-01-15',
-      estimatedCompletion: '2024-01-22',
-      purpose: 'Employment',
-      quantity: 1,
-      fee: 50,
-      progress: 100,
-    },
-    {
-      id: '2',
-      referenceNumber: 'REF-2024-002',
-      certificateType: 'Certificate of Residency',
-      status: 'Processing',
-      dateSubmitted: '2024-01-18',
-      estimatedCompletion: '2024-01-25',
-      purpose: 'School Requirements',
-      quantity: 2,
-      fee: 100,
-      progress: 60,
-    },
-    {
-      id: '3',
-      referenceNumber: 'REF-2024-003',
-      certificateType: 'Certificate of Indigency',
-      status: 'Pending',
-      dateSubmitted: '2024-01-20',
-      estimatedCompletion: '2024-01-27',
-      purpose: 'Medical Assistance',
-      quantity: 1,
-      fee: 50,
-      progress: 25,
-    },
-  ];
+  const handleRefresh = () => {
+    fetchUserRequests(true);
+  };
 
-  const statusOptions = ['All', 'Pending', 'Processing', 'Ready', 'Completed', 'Rejected'];
+  const handleGenerateCertificate = async (request: CertificateRequest) => {
+    if (!user) return;
+
+    setGeneratingId(request.id);
+    try {
+      const result = await generateCertificatePDF({
+        requestId: request.id,
+        userId: user.id,
+        certificateType: request.certificate_type,
+        purpose: request.purpose,
+      });
+
+      if (result.success) {
+        // Refresh the entire list from server to get the updated pdf_url
+        await fetchUserRequests(true);
+        Alert.alert('Success', 'Certificate generated successfully! You can now download it.');
+      } else {
+        Alert.alert('Error', result.error || 'Failed to generate certificate');
+      }
+    } catch (error) {
+      console.error('Generate error:', error);
+      Alert.alert('Error', 'Failed to generate certificate');
+    } finally {
+      setGeneratingId(null);
+    }
+  };
+
+  const handleDownloadCertificate = async (request: CertificateRequest) => {
+    if (!request.pdf_url) return;
+
+    setDownloadingId(request.id);
+    try {
+      const fileName = `Certificate_${request.certificate_number || 'Document'}.pdf`;
+      const result = await downloadCertificate(request.pdf_url, fileName);
+
+      if (result.success) {
+        Alert.alert('Success', 'Certificate downloaded successfully!');
+      } else {
+        Alert.alert('Error', result.error || 'Failed to download certificate');
+      }
+    } catch (error) {
+      console.error('Download error:', error);
+      Alert.alert('Error', 'Failed to download certificate');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  // Mock data removed - now using real Supabase data from fetchUserRequests()
+
+  const statusOptions = ['All', 'pending', 'in_progress', 'completed', 'rejected'];
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Pending':
+      case 'pending':
         return theme.colors.warning;
-      case 'Processing':
+      case 'in_progress':
         return theme.colors.info;
-      case 'Ready':
+      case 'completed':
         return theme.colors.success;
-      case 'Completed':
-        return theme.colors.success;
-      case 'Rejected':
+      case 'rejected':
         return theme.colors.error;
       default:
         return theme.colors.textSecondary;
@@ -125,18 +206,31 @@ export default function TrackRequestScreen({ navigation }: TrackRequestScreenPro
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'Pending':
+      case 'pending':
         return 'time-outline';
-      case 'Processing':
+      case 'in_progress':
         return 'refresh-outline';
-      case 'Ready':
-        return 'checkmark-circle-outline';
-      case 'Completed':
+      case 'completed':
         return 'checkmark-done-outline';
-      case 'Rejected':
+      case 'rejected':
         return 'close-circle-outline';
       default:
         return 'help-outline';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return 'Pending';
+      case 'in_progress':
+        return 'In Progress';
+      case 'completed':
+        return 'Completed';
+      case 'rejected':
+        return 'Rejected';
+      default:
+        return status;
     }
   };
 
@@ -145,7 +239,7 @@ export default function TrackRequestScreen({ navigation }: TrackRequestScreenPro
       case 'pending':
         return 25;
       case 'in_progress':
-        return 50;
+        return 65;
       case 'completed':
         return 100;
       case 'rejected':
@@ -187,13 +281,13 @@ export default function TrackRequestScreen({ navigation }: TrackRequestScreenPro
           <Text style={styles.certificateType}>{item.certificate_type}</Text>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '15' }]}>
-          <Ionicons 
-            name={getStatusIcon(item.status) as any} 
-            size={16} 
-            color={getStatusColor(item.status)} 
+          <Ionicons
+            name={getStatusIcon(item.status) as any}
+            size={moderateScale(16)}
+            color={getStatusColor(item.status)}
           />
           <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-            {item.status}
+            {getStatusLabel(item.status)}
           </Text>
         </View>
       </View>
@@ -204,25 +298,25 @@ export default function TrackRequestScreen({ navigation }: TrackRequestScreenPro
       <View style={styles.requestDetails}>
         <View style={styles.detailRow}>
           <View style={styles.detailItem}>
-            <Ionicons name="calendar-outline" size={16} color={theme.colors.textSecondary} />
+            <Ionicons name="calendar-outline" size={moderateScale(16)} color={theme.colors.textSecondary} />
             <Text style={styles.detailText}>Submitted</Text>
             <Text style={styles.detailValue}>{new Date(item.created_at).toLocaleDateString()}</Text>
           </View>
           <View style={styles.detailItem}>
-            <Ionicons name="time-outline" size={16} color={theme.colors.textSecondary} />
+            <Ionicons name="time-outline" size={moderateScale(16)} color={theme.colors.textSecondary} />
             <Text style={styles.detailText}>Status</Text>
-            <Text style={styles.detailValue}>{item.status}</Text>
+            <Text style={styles.detailValue}>{getStatusLabel(item.status)}</Text>
           </View>
         </View>
-        
+
         <View style={styles.detailRow}>
           <View style={styles.detailItem}>
-            <Ionicons name="document-outline" size={16} color={theme.colors.textSecondary} />
+            <Ionicons name="document-outline" size={moderateScale(16)} color={theme.colors.textSecondary} />
             <Text style={styles.detailText}>Purpose</Text>
             <Text style={styles.detailValue}>{item.purpose}</Text>
           </View>
           <View style={styles.detailItem}>
-            <Ionicons name="cash-outline" size={16} color={theme.colors.textSecondary} />
+            <Ionicons name="cash-outline" size={moderateScale(16)} color={theme.colors.textSecondary} />
             <Text style={styles.detailText}>Amount</Text>
             <Text style={styles.detailValue}>₱{item.amount || 50}</Text>
           </View>
@@ -230,17 +324,47 @@ export default function TrackRequestScreen({ navigation }: TrackRequestScreenPro
       </View>
 
       <View style={styles.requestActions}>
-        <TouchableOpacity style={styles.actionButton}>
-          <Ionicons name="eye-outline" size={16} color={theme.colors.primary} />
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => navigation.navigate('RequestDetails', { request: item })}
+        >
+          <Ionicons name="eye-outline" size={moderateScale(16)} color={theme.colors.primary} />
           <Text style={styles.actionButtonText}>View Details</Text>
         </TouchableOpacity>
-        {item.status === 'Ready' && (
-          <TouchableOpacity style={[styles.actionButton, styles.primaryActionButton]}>
-            <Ionicons name="download-outline" size={16} color="white" />
-            <Text style={[styles.actionButtonText, styles.primaryActionButtonText]}>
-              Download
-            </Text>
-          </TouchableOpacity>
+        {item.status === 'completed' && (
+          item.pdf_url ? (
+            // Download button - PDF exists
+            <TouchableOpacity
+              style={[styles.actionButton, styles.primaryActionButton]}
+              onPress={() => handleDownloadCertificate(item)}
+              disabled={downloadingId === item.id}
+            >
+              {downloadingId === item.id ? (
+                <ActivityIndicator color="white" size="small" />
+              ) : (
+                <Ionicons name="download-outline" size={moderateScale(16)} color="white" />
+              )}
+              <Text style={[styles.actionButtonText, styles.primaryActionButtonText]}>
+                {downloadingId === item.id ? 'Downloading...' : 'Download'}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            // Generate button - PDF doesn't exist yet
+            <TouchableOpacity
+              style={[styles.actionButton, styles.primaryActionButton]}
+              onPress={() => handleGenerateCertificate(item)}
+              disabled={generatingId === item.id}
+            >
+              {generatingId === item.id ? (
+                <ActivityIndicator color="white" size="small" />
+              ) : (
+                <Ionicons name="document-text-outline" size={moderateScale(16)} color="white" />
+              )}
+              <Text style={[styles.actionButtonText, styles.primaryActionButtonText]}>
+                {generatingId === item.id ? 'Generating...' : 'Generate Certificate'}
+              </Text>
+            </TouchableOpacity>
+          )
         )}
       </View>
     </View>
@@ -258,15 +382,17 @@ export default function TrackRequestScreen({ navigation }: TrackRequestScreenPro
         end={{ x: 1, y: 1 }}
       >
         <View style={styles.headerContent}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Ionicons name="arrow-back" size={24} color="white" />
+            <Ionicons name="arrow-back" size={moderateScale(24)} color="white" />
           </TouchableOpacity>
-          
-          <Text style={styles.title}>Track Requests</Text>
-          
+
+          <View style={styles.headerCenter}>
+            <Text style={styles.title}>Track Requests</Text>
+          </View>
+
           <View style={styles.headerRight} />
         </View>
       </LinearGradient>
@@ -275,7 +401,7 @@ export default function TrackRequestScreen({ navigation }: TrackRequestScreenPro
         {/* Search and Filters */}
         <View style={styles.searchSection}>
           <View style={styles.searchContainer}>
-            <Ionicons name="search-outline" size={20} color={theme.colors.textSecondary} />
+            <Ionicons name="search-outline" size={moderateScale(20)} color={theme.colors.textSecondary} />
             <TextInput
               style={styles.searchInput}
               placeholder="Search by reference number or type"
@@ -285,8 +411,8 @@ export default function TrackRequestScreen({ navigation }: TrackRequestScreenPro
             />
           </View>
 
-          <ScrollView 
-            horizontal 
+          <ScrollView
+            horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.filterContainer}
           >
@@ -303,7 +429,7 @@ export default function TrackRequestScreen({ navigation }: TrackRequestScreenPro
                   styles.filterButtonText,
                   selectedStatus === status && styles.activeFilterButtonText
                 ]}>
-                  {status}
+                  {status === 'All' ? 'All' : getStatusLabel(status)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -330,9 +456,17 @@ export default function TrackRequestScreen({ navigation }: TrackRequestScreenPro
             keyExtractor={(item) => item.id}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.listContainer}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                colors={[theme.colors.primary]}
+                tintColor={theme.colors.primary}
+              />
+            }
             ListEmptyComponent={
               <View style={styles.emptyState}>
-                <Ionicons name="document-text-outline" size={64} color={theme.colors.textTertiary} />
+                <Ionicons name="document-text-outline" size={moderateScale(64)} color={theme.colors.textTertiary} />
                 <Text style={styles.emptyStateText}>No requests found</Text>
                 <Text style={styles.emptyStateSubtext}>
                   Try adjusting your search or filter criteria
@@ -352,34 +486,46 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   header: {
-    paddingTop: theme.spacing.md,
-    paddingBottom: theme.spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.lg,
+    paddingHorizontal: spacing.lg,
   },
   backButton: {
-    padding: theme.spacing.sm,
+    width: moderateScale(40),
+    height: moderateScale(40),
+    borderRadius: moderateScale(20),
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: spacing.md,
   },
   title: {
-    fontSize: theme.fontSize.xl,
+    fontSize: fontSize.lg,
     fontWeight: theme.fontWeight.bold,
     fontFamily: theme.fontFamily.bold,
     color: 'white',
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   headerRight: {
-    width: 40,
+    width: moderateScale(40),
   },
   content: {
     flex: 1,
   },
   searchSection: {
     backgroundColor: theme.colors.surface,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
@@ -387,29 +533,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.colors.background,
-    borderRadius: theme.borderRadius.lg,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-    marginBottom: theme.spacing.md,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
   searchInput: {
     flex: 1,
-    marginLeft: theme.spacing.sm,
-    fontSize: theme.fontSize.md,
+    marginLeft: spacing.sm,
+    fontSize: fontSize.md,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.text,
   },
   filterContainer: {
-    paddingBottom: theme.spacing.xs,
+    paddingBottom: spacing.xs,
   },
   filterButton: {
     backgroundColor: theme.colors.background,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.borderRadius.lg,
-    marginRight: theme.spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+    marginRight: spacing.sm,
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
@@ -418,7 +564,7 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.primary,
   },
   filterButtonText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: fontSize.sm,
     color: theme.colors.textSecondary,
     fontWeight: theme.fontWeight.medium,
     fontFamily: theme.fontFamily.medium,
@@ -429,176 +575,177 @@ const styles = StyleSheet.create({
     fontFamily: theme.fontFamily.semiBold,
   },
   resultsHeader: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     backgroundColor: theme.colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
   resultsCount: {
-    fontSize: theme.fontSize.sm,
+    fontSize: fontSize.sm,
     color: theme.colors.textSecondary,
     fontWeight: theme.fontWeight.medium,
     fontFamily: theme.fontFamily.medium,
   },
   listContainer: {
-    padding: theme.spacing.lg,
+    padding: spacing.lg,
   },
   requestCard: {
     backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.lg,
-    marginBottom: theme.spacing.md,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: verticalScale(2),
     },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: moderateScale(4),
     elevation: 3,
   },
   requestHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: theme.spacing.md,
+    marginBottom: spacing.md,
   },
   requestInfo: {
     flex: 1,
   },
   referenceNumber: {
-    fontSize: theme.fontSize.lg,
+    fontSize: fontSize.lg,
     fontWeight: theme.fontWeight.bold,
     fontFamily: theme.fontFamily.bold,
     color: theme.colors.text,
-    marginBottom: theme.spacing.xs,
+    marginBottom: spacing.xs,
   },
   certificateType: {
-    fontSize: theme.fontSize.md,
+    fontSize: fontSize.md,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.textSecondary,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs,
-    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
   },
   statusText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: fontSize.sm,
     fontWeight: theme.fontWeight.medium,
     fontFamily: theme.fontFamily.medium,
-    marginLeft: theme.spacing.xs,
+    marginLeft: spacing.xs,
   },
   progressContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: theme.spacing.lg,
+    marginBottom: spacing.lg,
   },
   progressBarBackground: {
     flex: 1,
-    height: 6,
+    height: verticalScale(6),
     backgroundColor: theme.colors.border,
-    borderRadius: 3,
-    marginRight: theme.spacing.sm,
+    borderRadius: moderateScale(3),
+    marginRight: spacing.sm,
   },
   progressBarFill: {
     height: '100%',
-    borderRadius: 3,
+    borderRadius: moderateScale(3),
   },
   progressText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: fontSize.sm,
     color: theme.colors.textSecondary,
     fontWeight: theme.fontWeight.medium,
     fontFamily: theme.fontFamily.medium,
-    minWidth: 30,
+    minWidth: scale(30),
   },
   requestDetails: {
-    marginBottom: theme.spacing.lg,
+    marginBottom: spacing.lg,
   },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: theme.spacing.sm,
+    marginBottom: spacing.sm,
   },
   detailItem: {
     flex: 1,
-    marginHorizontal: theme.spacing.xs,
+    alignItems: 'center',
   },
   detailText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: fontSize.xs,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.textSecondary,
-    marginTop: theme.spacing.xs,
-    marginLeft: theme.spacing.lg + 4,
+    marginTop: spacing.xs,
+    textAlign: 'center',
   },
   detailValue: {
-    fontSize: theme.fontSize.sm,
+    fontSize: fontSize.sm,
     color: theme.colors.text,
     fontWeight: theme.fontWeight.medium,
     fontFamily: theme.fontFamily.medium,
-    marginLeft: theme.spacing.lg + 4,
+    textAlign: 'center',
   },
   requestActions: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    gap: spacing.sm,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: theme.colors.primary,
-    marginLeft: theme.spacing.sm,
+    marginLeft: spacing.sm,
   },
   primaryActionButton: {
     backgroundColor: theme.colors.primary,
     borderColor: theme.colors.primary,
   },
   actionButtonText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: fontSize.sm,
     color: theme.colors.primary,
     fontWeight: theme.fontWeight.medium,
     fontFamily: theme.fontFamily.medium,
-    marginLeft: theme.spacing.xs,
+    marginLeft: spacing.xs,
   },
   primaryActionButtonText: {
     color: 'white',
   },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: theme.spacing.xl * 2,
+    paddingVertical: spacing.xl * 2,
   },
   emptyStateText: {
-    fontSize: theme.fontSize.lg,
+    fontSize: fontSize.lg,
     fontWeight: theme.fontWeight.medium,
     fontFamily: theme.fontFamily.medium,
     color: theme.colors.textSecondary,
-    marginTop: theme.spacing.lg,
-    marginBottom: theme.spacing.sm,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
   },
   emptyStateSubtext: {
-    fontSize: theme.fontSize.md,
+    fontSize: fontSize.md,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.textTertiary,
     textAlign: 'center',
-    paddingHorizontal: theme.spacing.xl,
-    lineHeight: 20,
+    paddingHorizontal: spacing.xl,
+    lineHeight: verticalScale(20),
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: theme.spacing.xl * 2,
+    paddingVertical: spacing.xl * 2,
   },
   loadingText: {
-    fontSize: theme.fontSize.md,
+    fontSize: fontSize.md,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.textSecondary,
-    marginTop: theme.spacing.md,
+    marginTop: spacing.md,
   },
 });

@@ -1,5 +1,4 @@
-// @ts-nocheck
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,15 +7,19 @@ import {
   ScrollView,
   Image,
   SafeAreaView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import StatusBarWrapper from '../components/StatusBarWrapper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { useAuth } from '../contexts/AuthContext';
+import { dimensions, spacing, fontSize, borderRadius, scale, verticalScale, moderateScale } from '../utils/responsive';
+import { pickProfileImage, uploadProfileImage } from '../utils/profileImageUpload';
 
 interface ProfileScreenProps {
-  navigation: any;
+  navigation: import('../types/navigation').AppNavigationProp;
 }
 
 interface ProfileAction {
@@ -28,10 +31,67 @@ interface ProfileAction {
 }
 
 export default function ProfileScreen({ navigation }: ProfileScreenProps) {
-  const { user, signOut } = useAuth();
-  
+  const { user } = useAuth();
+  const [uploading, setUploading] = useState(false);
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+
   // Default avatar image
-  const defaultAvatar = 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&q=80';
+  const defaultAvatar = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user?.full_name || 'User') + '&size=200&background=4A90E2&color=fff';
+
+  useEffect(() => {
+    // Check for face photo from registration
+    const extendedUser = user as any;
+    if (extendedUser?.photo_url) {
+      setProfileImage(extendedUser.photo_url);
+    }
+  }, [user]);
+
+  const handleUploadProfileImage = async () => {
+    // Only allow purok chairman and admin to upload profile images
+    if (user?.role !== 'purok_chairman' && user?.role !== 'admin') {
+      Alert.alert(
+        'Permission Denied',
+        'Only administrators and purok chairmen can upload profile pictures. This is a government application that requires official profile photos.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    try {
+      const imageUri = await pickProfileImage();
+
+      if (!imageUri) return;
+
+      setUploading(true);
+
+      const result: any = await uploadProfileImage(user.id, imageUri);
+
+      if (result && typeof result === 'object' && result.success && result.imageUrl) {
+        setProfileImage(result.imageUrl);
+        Alert.alert(
+          'Success',
+          'Profile picture updated successfully!',
+          [{ text: 'OK' }]
+        );
+      } else {
+        const errorMsg = result && typeof result === 'object' && result.error ? result.error : 'Failed to upload profile picture. Please try again.';
+        Alert.alert(
+          'Upload Failed',
+          errorMsg,
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Error uploading profile image:', error);
+      Alert.alert(
+        'Upload Failed',
+        'An error occurred while uploading your profile picture.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setUploading(false);
+    }
+  };
   
   // Format member since date
   const formatMemberSince = (dateString: string) => {
@@ -42,61 +102,85 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     });
   };
 
-  const profileActions: ProfileAction[] = [
-    {
-      icon: 'create-outline',
-      title: 'Edit Profile',
-      subtitle: 'Update your personal information',
-      color: theme.colors.primary,
-      onPress: () => {},
-    },
-    {
-      icon: 'shield-checkmark-outline',
-      title: 'Privacy & Security',
-      subtitle: 'Manage your privacy settings',
-      color: theme.colors.success,
-      onPress: () => {},
-    },
-    {
-      icon: 'notifications-outline',
-      title: 'Notification Settings',
-      subtitle: 'Configure notification preferences',
-      color: theme.colors.warning,
-      onPress: () => navigation.navigate('Notifications'),
-    },
-    {
-      icon: 'help-circle-outline',
-      title: 'Help & Support',
-      subtitle: 'Get help and contact support',
-      color: theme.colors.info,
-      onPress: () => {},
-    },
-    {
-      icon: 'document-text-outline',
-      title: 'Terms & Policies',
-      subtitle: 'Read our terms and privacy policy',
-      color: theme.colors.secondary,
-      onPress: () => {},
-    },
-  ];
+  // Different actions based on user role
+  const getProfileActions = (): ProfileAction[] => {
+    const commonActions = [
+      {
+        icon: 'shield-checkmark-outline',
+        title: 'Change Password',
+        subtitle: 'Update your account password',
+        color: theme.colors.success,
+        onPress: () => navigation.navigate('ChangePassword'),
+      },
+      {
+        icon: 'notifications-outline',
+        title: 'Notification Settings',
+        subtitle: 'Configure notification preferences',
+        color: theme.colors.warning,
+        onPress: () => {
+          Alert.alert(
+            'Notification Settings',
+            'Configure how and when you receive notifications about certificate requests, updates, and announcements.\n\nComing soon!',
+            [{ text: 'OK' }]
+          );
+        },
+      },
+      {
+        icon: 'help-circle-outline',
+        title: 'Help & Support',
+        subtitle: 'Get help and contact support',
+        color: theme.colors.info,
+        onPress: () => {
+          Alert.alert(
+            'Help & Support',
+            'Need assistance? You can:\n\n• Check our FAQ section\n• Contact support via email\n• Call our helpline\n• Visit the barangay office\n\nComing soon!',
+            [{ text: 'OK' }]
+          );
+        },
+      },
+      {
+        icon: 'document-text-outline',
+        title: 'Terms & Policies',
+        subtitle: 'Read our terms and privacy policy',
+        color: theme.colors.secondary,
+        onPress: () => {
+          Alert.alert(
+            'Terms & Policies',
+            'View our:\n\n• Terms of Service\n• Privacy Policy\n• Data Protection Guidelines\n• User Agreement\n\nComing soon!',
+            [{ text: 'OK' }]
+          );
+        },
+      },
+    ];
 
-  const handleLogout = async () => {
-    try {
-      await signOut();
-      navigation.navigate('Login');
-    } catch (error) {
-      console.error('Error signing out:', error);
+    // Only residents can edit their profile
+    if (user?.role === 'resident') {
+      return [
+        {
+          icon: 'create-outline',
+          title: 'Edit Profile',
+          subtitle: 'Update your personal information',
+          color: theme.colors.primary,
+          onPress: () => navigation.navigate('EditProfile'),
+        },
+        ...commonActions,
+      ];
     }
+
+    // Chairman has read-only profile
+    return commonActions;
   };
+
+  const profileActions = getProfileActions();
 
   const renderInfoItem = (icon: string, label: string, value: string) => (
     <View style={styles.infoItem}>
       <View style={styles.infoIcon}>
-        <Ionicons name={icon as any} size={20} color={theme.colors.primary} />
+        <Ionicons name={icon as any} size={moderateScale(20)} color={theme.colors.primary} />
       </View>
       <View style={styles.infoContent}>
         <Text style={styles.infoLabel}>{label}</Text>
-        <Text style={styles.infoValue}>{value}</Text>
+        <Text style={styles.infoValue} numberOfLines={2}>{value}</Text>
       </View>
     </View>
   );
@@ -109,13 +193,13 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       activeOpacity={0.7}
     >
       <View style={[styles.actionIcon, { backgroundColor: action.color + '15' }]}>
-        <Ionicons name={action.icon as any} size={22} color={action.color} />
+        <Ionicons name={action.icon as any} size={moderateScale(22)} color={action.color} />
       </View>
       <View style={styles.actionContent}>
         <Text style={styles.actionTitle}>{action.title}</Text>
-        <Text style={styles.actionSubtitle}>{action.subtitle}</Text>
+        <Text style={styles.actionSubtitle} numberOfLines={1}>{action.subtitle}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={16} color={theme.colors.textTertiary} />
+      <Ionicons name="chevron-forward" size={moderateScale(16)} color={theme.colors.textTertiary} />
     </TouchableOpacity>
   );
 
@@ -131,15 +215,17 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         end={{ x: 1, y: 1 }}
       >
         <View style={styles.headerContent}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Ionicons name="arrow-back" size={24} color="white" />
+            <Ionicons name="arrow-back" size={moderateScale(24)} color="white" />
           </TouchableOpacity>
-          
-          <Text style={styles.title}>Profile</Text>
-          
+
+          <View style={styles.headerCenter}>
+            <Text style={styles.title}>Profile</Text>
+          </View>
+
           <View style={styles.headerRight} />
         </View>
       </LinearGradient>
@@ -152,21 +238,44 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         {/* Profile Card */}
         <View style={styles.profileCard}>
           <View style={styles.avatarContainer}>
-            <Image source={{ uri: defaultAvatar }} style={styles.avatar} />
-            <TouchableOpacity style={styles.editAvatarButton}>
-              <Ionicons name="camera" size={16} color="white" />
-            </TouchableOpacity>
+            {uploading ? (
+              <View style={[styles.avatar, styles.avatarLoading]}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+              </View>
+            ) : (
+              <Image
+                source={{ uri: profileImage || defaultAvatar }}
+                style={styles.avatar}
+                onError={() => setProfileImage(null)}
+              />
+            )}
+            {(user?.role === 'purok_chairman' || user?.role === 'admin') && (
+              <TouchableOpacity
+                style={styles.editAvatarButton}
+                onPress={handleUploadProfileImage}
+                disabled={uploading}
+              >
+                <Ionicons name="camera" size={moderateScale(16)} color="white" />
+              </TouchableOpacity>
+            )}
           </View>
 
-          <Text style={styles.userName}>{user?.full_name || 'User'}</Text>
-          <Text style={styles.memberSince}>
+          <Text style={styles.userName} numberOfLines={1}>{user?.full_name || 'User'}</Text>
+          <Text style={styles.memberSince} numberOfLines={1}>
             Member since {user?.created_at ? formatMemberSince(user.created_at) : 'N/A'}
           </Text>
 
-          <TouchableOpacity style={styles.editProfileButton}>
-            <Ionicons name="create" size={16} color="white" />
-            <Text style={styles.editProfileText}>Edit Profile</Text>
-          </TouchableOpacity>
+          {user?.role === 'resident' ? (
+            <TouchableOpacity style={styles.editProfileButton}>
+              <Ionicons name="create" size={moderateScale(16)} color="white" />
+              <Text style={styles.editProfileText}>Edit Profile</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.adminNotice}>
+              <Ionicons name="lock-closed" size={moderateScale(16)} color={theme.colors.warning} />
+              <Text style={styles.adminNoticeText}>Profile managed by administrator</Text>
+            </View>
+          )}
         </View>
 
         {/* Personal Information */}
@@ -188,14 +297,6 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             {profileActions.map(renderActionItem)}
           </View>
         </View>
-
-        {/* Logout Button */}
-        <View style={styles.section}>
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Ionicons name="log-out-outline" size={20} color={theme.colors.error} />
-            <Text style={styles.logoutText}>Logout</Text>
-          </TouchableOpacity>
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -207,220 +308,243 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   header: {
-    paddingTop: theme.spacing.md,
-    paddingBottom: theme.spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.lg,
+    paddingHorizontal: spacing.lg,
   },
   backButton: {
-    padding: theme.spacing.sm,
+    padding: spacing.sm,
+    width: moderateScale(40),
+    height: moderateScale(40),
+    borderRadius: moderateScale(20),
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: spacing.md,
   },
   title: {
-    fontSize: theme.fontSize.xl,
+    fontSize: fontSize.xl,
     fontWeight: theme.fontWeight.bold,
     fontFamily: theme.fontFamily.bold,
     color: 'white',
   },
   headerRight: {
-    width: 40,
+    width: moderateScale(40),
   },
   content: {
     flex: 1,
   },
   scrollContent: {
-    padding: theme.spacing.lg,
-    paddingBottom: theme.spacing.xl,
+    padding: spacing.lg,
+    paddingBottom: spacing.xl,
   },
   profileCard: {
     backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.xl,
-    padding: theme.spacing.xl,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
     alignItems: 'center',
-    marginBottom: theme.spacing.lg,
+    marginBottom: spacing.lg,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 4,
+      height: verticalScale(4),
     },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
+    shadowRadius: moderateScale(8),
     elevation: 5,
   },
   avatarContainer: {
     position: 'relative',
-    marginBottom: theme.spacing.lg,
+    marginBottom: spacing.lg,
   },
   avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 4,
+    width: moderateScale(100),
+    height: moderateScale(100),
+    borderRadius: moderateScale(50),
+    borderWidth: scale(4),
     borderColor: theme.colors.primary,
+  },
+  avatarLoading: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.background,
   },
   editAvatarButton: {
     position: 'absolute',
     bottom: 0,
     right: 0,
     backgroundColor: theme.colors.primary,
-    borderRadius: 15,
-    width: 30,
-    height: 30,
+    borderRadius: moderateScale(15),
+    width: moderateScale(30),
+    height: moderateScale(30),
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: verticalScale(2),
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: moderateScale(3.84),
+    elevation: 5,
   },
   userName: {
-    fontSize: theme.fontSize.xxl,
+    fontSize: fontSize.xxl,
     fontWeight: theme.fontWeight.bold,
     fontFamily: theme.fontFamily.bold,
     color: theme.colors.text,
-    marginBottom: theme.spacing.xs,
+    marginBottom: spacing.xs,
+    textAlign: 'center',
+    paddingHorizontal: spacing.md,
   },
   memberSince: {
-    fontSize: theme.fontSize.sm,
+    fontSize: fontSize.sm,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.textSecondary,
-    marginBottom: theme.spacing.lg,
+    marginBottom: spacing.lg,
+    textAlign: 'center',
   },
   editProfileButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.colors.primary,
-    paddingHorizontal: theme.spacing.xl,
-    paddingVertical: theme.spacing.md,
-    borderRadius: theme.borderRadius.lg,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
   },
   editProfileText: {
-    marginLeft: theme.spacing.xs,
+    marginLeft: spacing.xs,
     color: 'white',
-    fontSize: theme.fontSize.md,
+    fontSize: fontSize.md,
+    fontWeight: theme.fontWeight.medium,
+    fontFamily: theme.fontFamily.medium,
+  },
+  adminNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.warning + '15',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.warning + '30',
+  },
+  adminNoticeText: {
+    marginLeft: spacing.sm,
+    color: theme.colors.warning,
+    fontSize: fontSize.sm,
     fontWeight: theme.fontWeight.medium,
     fontFamily: theme.fontFamily.medium,
   },
   section: {
-    marginBottom: theme.spacing.xl,
+    marginBottom: spacing.xl,
   },
   sectionTitle: {
-    fontSize: theme.fontSize.lg,
+    fontSize: fontSize.lg,
     fontWeight: theme.fontWeight.semibold,
     fontFamily: theme.fontFamily.semiBold,
     color: theme.colors.text,
-    marginBottom: theme.spacing.md,
+    marginBottom: spacing.md,
   },
   infoContainer: {
     backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.lg,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: verticalScale(2),
     },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: moderateScale(4),
     elevation: 3,
   },
   infoItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: theme.spacing.md,
+    paddingVertical: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
   infoIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: moderateScale(40),
+    height: moderateScale(40),
+    borderRadius: moderateScale(20),
     backgroundColor: theme.colors.primary + '15',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: theme.spacing.md,
+    marginRight: spacing.md,
+    flexShrink: 0,
   },
   infoContent: {
     flex: 1,
   },
   infoLabel: {
-    fontSize: theme.fontSize.sm,
+    fontSize: fontSize.sm,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.textSecondary,
-    marginBottom: theme.spacing.xs,
+    marginBottom: spacing.xs,
   },
   infoValue: {
-    fontSize: theme.fontSize.md,
+    fontSize: fontSize.md,
     color: theme.colors.text,
     fontWeight: theme.fontWeight.medium,
     fontFamily: theme.fontFamily.medium,
+    flexWrap: 'wrap',
   },
   actionsContainer: {
     backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: borderRadius.lg,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: verticalScale(2),
     },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: moderateScale(4),
     elevation: 3,
   },
   actionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: theme.spacing.lg,
-    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
   actionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: moderateScale(44),
+    height: moderateScale(44),
+    borderRadius: moderateScale(22),
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: theme.spacing.md,
+    marginRight: spacing.md,
+    flexShrink: 0,
   },
   actionContent: {
     flex: 1,
   },
   actionTitle: {
-    fontSize: theme.fontSize.md,
+    fontSize: fontSize.md,
     fontWeight: theme.fontWeight.medium,
     fontFamily: theme.fontFamily.medium,
     color: theme.colors.text,
-    marginBottom: theme.spacing.xs,
+    marginBottom: spacing.xs,
   },
   actionSubtitle: {
-    fontSize: theme.fontSize.sm,
+    fontSize: fontSize.sm,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.textSecondary,
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.surface,
-    paddingVertical: theme.spacing.lg,
-    borderRadius: theme.borderRadius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.error + '30',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  logoutText: {
-    marginLeft: theme.spacing.sm,
-    fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.medium,
-    fontFamily: theme.fontFamily.medium,
-    color: theme.colors.error,
   },
 });

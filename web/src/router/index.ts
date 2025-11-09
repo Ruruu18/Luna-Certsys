@@ -44,6 +44,16 @@ const router = createRouter({
           path: 'certificate-requests',
           name: 'admin-certificate-requests',
           component: () => import('../views/CertificateRequestsView.vue')
+        },
+        {
+          path: 'payments',
+          name: 'admin-payments',
+          component: () => import('../views/PaymentsView.vue')
+        },
+        {
+          path: 'reports',
+          name: 'admin-reports',
+          component: () => import('../views/ReportsView.vue')
         }
       ]
     }

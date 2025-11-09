@@ -16,24 +16,48 @@
       </div>
     </div>
 
+    <!-- Search and Filter -->
+    <div class="search-filter-section">
+      <div class="search-box">
+        <svg class="search-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Search users by name, email, phone..."
+          class="search-input"
+        />
+      </div>
+    </div>
+
+    <!-- Filter Tabs -->
+    <div class="filter-tabs">
+      <button
+        v-for="filter in roleFilters"
+        :key="filter.value"
+        @click="activeFilter = filter.value"
+        class="filter-tab"
+        :class="{ 'filter-tab-active': activeFilter === filter.value }"
+      >
+        {{ filter.label }}
+        <span v-if="filter.count !== undefined" class="filter-count">{{ filter.count }}</span>
+      </button>
+    </div>
+
     <!-- Users Table -->
     <div class="table-container">
-      <div v-if="usersStore.loading" class="loading">
-        <div class="spinner"></div>
-        <p>Loading users...</p>
-      </div>
-
-      <div v-else-if="usersStore.error" class="alert alert-error">
+      <div v-if="usersStore.error" class="alert alert-error">
         {{ usersStore.error }}
       </div>
 
-      <div v-else-if="usersStore.users.length === 0" class="empty-state">
+      <div v-else-if="filteredUsers.length === 0" class="empty-state">
         <svg class="empty-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
         </svg>
         <h3>No users found</h3>
-        <p>Get started by adding your first user</p>
-        <button @click="showAddModal = true" class="btn btn-primary">Add User</button>
+        <p>{{ searchQuery ? 'No users match your search' : 'Get started by adding your first user' }}</p>
+        <button v-if="!searchQuery" @click="showAddModal = true" class="btn btn-primary">Add User</button>
       </div>
 
       <table v-else class="table">
@@ -42,6 +66,7 @@
             <th>Name</th>
             <th>Email</th>
             <th>Role</th>
+            <th>Verification</th>
             <th>Purok</th>
             <th>Phone</th>
             <th>Created</th>
@@ -49,7 +74,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="user in usersStore.users" :key="user.id">
+          <tr v-for="user in filteredUsers" :key="user.id">
             <td>
               <div class="user-cell">
                 <div class="user-avatar">
@@ -73,29 +98,63 @@
                 {{ user.role.replace('_', ' ') }}
               </span>
             </td>
+            <td>
+              <span
+                v-if="user.face_verified"
+                class="verification-badge verified"
+                title="Face verified"
+              >
+                <svg class="badge-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+                Verified
+              </span>
+              <span
+                v-else
+                class="verification-badge unverified"
+                title="Not verified"
+              >
+                <svg class="badge-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                Not Verified
+              </span>
+            </td>
             <td>{{ user.purok || '-' }}</td>
             <td>{{ user.phone_number || '-' }}</td>
             <td>{{ formatDate(user.created_at) }}</td>
             <td>
               <div class="action-buttons">
                 <button
+                  @click="viewUserDetails(user)"
+                  class="btn btn-info btn-sm btn-with-text"
+                  title="View details"
+                >
+                  <svg class="btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  <span class="btn-text">View</span>
+                </button>
+                <button
                   @click="editUser(user)"
-                  class="btn btn-outline btn-sm"
+                  class="btn btn-outline btn-sm btn-with-text"
                   title="Edit user"
                 >
                   <svg class="btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                   </svg>
+                  <span class="btn-text">Edit</span>
                 </button>
                 <button
                   @click="confirmDeleteUser(user)"
-                  class="btn btn-danger btn-sm"
+                  class="btn btn-danger btn-sm btn-with-text"
                   title="Delete user"
-                  :disabled="user.role === 'admin'"
                 >
                   <svg class="btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
+                  <span class="btn-text">Delete</span>
                 </button>
               </div>
             </td>
@@ -152,8 +211,52 @@
               >
                 <option value="resident">Resident</option>
                 <option value="purok_chairman">Purok Chairman</option>
-                <option value="admin">Admin</option>
               </select>
+            </div>
+
+            <!-- Photo Upload for Purok Chairman -->
+            <div v-if="formData.role === 'purok_chairman'" class="form-group">
+              <label class="form-label">
+                Chairman Photo
+                <span v-if="!showEditModal" class="text-danger">*</span>
+                <span v-else class="text-muted">(Optional - update only if needed)</span>
+              </label>
+              <div class="photo-upload-container">
+                <div v-if="photoPreview || (showEditModal && editingUser?.photo_url && !photoPreview)" class="photo-preview">
+                  <img :src="photoPreview || editingUser?.photo_url" alt="Chairman photo" />
+                  <button
+                    type="button"
+                    @click="removePhoto"
+                    class="photo-remove-btn"
+                    :disabled="formLoading"
+                    :title="showEditModal ? 'Change photo' : 'Remove photo'"
+                  >
+                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <div v-else class="photo-upload-box">
+                  <input
+                    type="file"
+                    ref="photoInput"
+                    @change="handlePhotoSelect"
+                    accept="image/*"
+                    class="photo-input"
+                    :disabled="formLoading"
+                  />
+                  <div class="upload-placeholder">
+                    <svg class="upload-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    <p class="upload-text">{{ showEditModal ? 'Change photo' : 'Upload photo' }}</p>
+                    <p class="upload-hint">PNG, JPG up to 5MB</p>
+                  </div>
+                </div>
+              </div>
+              <small class="form-help" :class="showEditModal ? 'text-muted' : 'text-warning'">
+                {{ showEditModal ? 'Upload new photo to update the chairman\'s profile picture' : 'Required for Purok Chairman to prevent fake profiles' }}
+              </small>
             </div>
 
             <div class="form-group">
@@ -189,6 +292,19 @@
                 :disabled="formLoading"
               ></textarea>
             </div>
+
+            <div v-if="!showEditModal" class="form-group">
+              <label for="password" class="form-label">Password</label>
+              <input
+                id="password"
+                v-model="formData.password"
+                type="password"
+                class="form-input"
+                placeholder="Leave empty for auto-generated password"
+                :disabled="formLoading"
+              />
+              <small class="form-help">If left empty, a secure password will be generated automatically</small>
+            </div>
           </form>
         </div>
 
@@ -209,6 +325,145 @@
           >
             <div v-if="formLoading" class="spinner"></div>
             {{ showEditModal ? 'Update' : 'Create' }} User
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- User Details Modal -->
+    <div v-if="showDetailsModal" class="modal" @click="showDetailsModal = false">
+      <div class="modal-content modal-large" @click.stop>
+        <div class="modal-header">
+          <h3 class="modal-title">User Details</h3>
+          <button @click="showDetailsModal = false" class="modal-close">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="modal-body" v-if="selectedUser">
+          <div class="details-container">
+            <!-- User Photo and Verification Status -->
+            <div class="details-header">
+              <div class="user-photo-section">
+                <div v-if="selectedUser.photo_url" class="user-photo-large">
+                  <img :src="selectedUser.photo_url" :alt="selectedUser.full_name" />
+                </div>
+                <div v-else class="user-photo-large user-photo-placeholder">
+                  <span>{{ selectedUser.full_name.charAt(0).toUpperCase() }}</span>
+                </div>
+                <div class="verification-badges">
+                  <span v-if="selectedUser.face_verified" class="badge badge-success">
+                    <svg class="badge-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    Face Verified
+                  </span>
+                  <span v-else class="badge badge-warning">Not Verified</span>
+                </div>
+              </div>
+              <div class="user-summary">
+                <h2>{{ selectedUser.full_name }}</h2>
+                <p class="user-email">{{ selectedUser.email }}</p>
+                <span
+                  class="badge badge-large"
+                  :class="{
+                    'badge-danger': selectedUser.role === 'admin',
+                    'badge-warning': selectedUser.role === 'purok_chairman',
+                    'badge-info': selectedUser.role === 'resident'
+                  }"
+                >
+                  {{ selectedUser.role.replace('_', ' ') }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Personal Information -->
+            <div class="details-section">
+              <h4 class="section-title">Personal Information</h4>
+              <div class="details-grid">
+                <div class="detail-item">
+                  <label>Date of Birth</label>
+                  <p>{{ selectedUser.date_of_birth ? formatDate(selectedUser.date_of_birth) : '-' }}</p>
+                </div>
+                <div class="detail-item">
+                  <label>Place of Birth</label>
+                  <p>{{ selectedUser.place_of_birth || '-' }}</p>
+                </div>
+                <div class="detail-item">
+                  <label>Gender</label>
+                  <p>{{ selectedUser.gender || '-' }}</p>
+                </div>
+                <div class="detail-item">
+                  <label>Civil Status</label>
+                  <p>{{ selectedUser.civil_status || '-' }}</p>
+                </div>
+                <div class="detail-item">
+                  <label>Age</label>
+                  <p>{{ getDisplayAge(selectedUser) }}</p>
+                </div>
+                <div class="detail-item">
+                  <label>Nationality</label>
+                  <p>{{ selectedUser.nationality || '-' }}</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Contact Information -->
+            <div class="details-section">
+              <h4 class="section-title">Contact Information</h4>
+              <div class="details-grid">
+                <div class="detail-item detail-item-full">
+                  <label>Address</label>
+                  <p>{{ selectedUser.address || '-' }}</p>
+                </div>
+                <div class="detail-item">
+                  <label>Phone Number</label>
+                  <p>{{ selectedUser.phone_number || '-' }}</p>
+                </div>
+                <div class="detail-item">
+                  <label>Purok</label>
+                  <p>{{ selectedUser.purok || '-' }}</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Account Information -->
+            <div class="details-section">
+              <h4 class="section-title">Account Information</h4>
+              <div class="details-grid">
+                <div class="detail-item">
+                  <label>Account Created</label>
+                  <p>{{ formatDateTime(selectedUser.created_at) }}</p>
+                </div>
+                <div class="detail-item">
+                  <label>Last Updated</label>
+                  <p>{{ formatDateTime(selectedUser.updated_at) }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button
+            @click="showDetailsModal = false"
+            type="button"
+            class="btn btn-outline"
+          >
+            Close
+          </button>
+          <button
+            @click="selectedUser && editUser(selectedUser)"
+            type="button"
+            class="btn btn-primary"
+            :disabled="!selectedUser"
+          >
+            <svg class="btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            Edit User
           </button>
         </div>
       </div>
@@ -251,39 +506,187 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useUsersStore } from '../stores/users'
-import type { User } from '../lib/supabase'
+import { supabase, type User } from '../lib/supabase'
 
 const usersStore = useUsersStore()
+
+// Filter out admin users from the display
+const nonAdminUsers = computed(() => {
+  return usersStore.users.filter(user => user.role !== 'admin')
+})
+
+const searchQuery = ref('')
+const activeFilter = ref('all')
+
+// Role filters with counts
+const roleFilters = computed(() => [
+  {
+    label: 'All Users',
+    value: 'all',
+    count: nonAdminUsers.value.length
+  },
+  {
+    label: 'Residents',
+    value: 'resident',
+    count: nonAdminUsers.value.filter(u => u.role === 'resident').length
+  },
+  {
+    label: 'Purok Chairmen',
+    value: 'purok_chairman',
+    count: nonAdminUsers.value.filter(u => u.role === 'purok_chairman').length
+  }
+])
+
+// Filtered and searched users
+const filteredUsers = computed(() => {
+  let users = nonAdminUsers.value
+
+  // Apply role filter
+  if (activeFilter.value !== 'all') {
+    users = users.filter(u => u.role === activeFilter.value)
+  }
+
+  // Apply search filter
+  if (searchQuery.value.trim()) {
+    const query = searchQuery.value.toLowerCase()
+    users = users.filter(u =>
+      u.full_name?.toLowerCase().includes(query) ||
+      u.email?.toLowerCase().includes(query) ||
+      u.phone_number?.toLowerCase().includes(query) ||
+      u.purok?.toLowerCase().includes(query)
+    )
+  }
+
+  return users
+})
 
 const showAddModal = ref(false)
 const showEditModal = ref(false)
 const showDeleteModal = ref(false)
+const showDetailsModal = ref(false)
 const formLoading = ref(false)
 const formError = ref('')
 const userToDelete = ref<User | null>(null)
 const editingUser = ref<User | null>(null)
+const selectedUser = ref<User | null>(null)
+const photoInput = ref<HTMLInputElement | null>(null)
+const photoFile = ref<File | null>(null)
+const photoPreview = ref<string>('')
 
 const formData = ref({
+  first_name: '',
+  last_name: '',
+  middle_name: '',
+  suffix: '',
   full_name: '',
   email: '',
   role: 'resident' as 'admin' | 'purok_chairman' | 'resident',
   purok: '',
   phone_number: '',
-  address: ''
+  address: '',
+  password: '',
+  face_verified: false,
+  photo_url: '',
+  face_verified_at: ''
 })
 
 const resetForm = () => {
   formData.value = {
+    first_name: '',
+    last_name: '',
+    middle_name: '',
+    suffix: '',
     full_name: '',
     email: '',
     role: 'resident',
     purok: '',
     phone_number: '',
-    address: ''
+    address: '',
+    password: '',
+    face_verified: false,
+    photo_url: '',
+    face_verified_at: ''
   }
   formError.value = ''
+  photoFile.value = null
+  photoPreview.value = ''
+  if (photoInput.value) {
+    photoInput.value.value = ''
+  }
+}
+
+// Photo handling functions
+const handlePhotoSelect = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+
+  if (!file) return
+
+  // Validate file type
+  if (!file.type.startsWith('image/')) {
+    formError.value = 'Please select an image file'
+    return
+  }
+
+  // Validate file size (5MB max)
+  const maxSize = 5 * 1024 * 1024 // 5MB in bytes
+  if (file.size > maxSize) {
+    formError.value = 'Image size must be less than 5MB'
+    return
+  }
+
+  photoFile.value = file
+
+  // Create preview
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    photoPreview.value = e.target?.result as string
+  }
+  reader.readAsDataURL(file)
+
+  formError.value = ''
+}
+
+const removePhoto = () => {
+  photoFile.value = null
+  photoPreview.value = ''
+  if (photoInput.value) {
+    photoInput.value.value = ''
+  }
+}
+
+const uploadPhoto = async (userId: string): Promise<string | null> => {
+  if (!photoFile.value) return null
+
+  try {
+    const fileExt = photoFile.value.name.split('.').pop()
+    const fileName = `${userId}-${Date.now()}.${fileExt}`
+    const filePath = `chairmen-photos/${fileName}`
+
+    const { data, error } = await supabase.storage
+      .from('user-photos')
+      .upload(filePath, photoFile.value, {
+        cacheControl: '3600',
+        upsert: false
+      })
+
+    if (error) {
+      console.error('Upload error:', error)
+      throw error
+    }
+
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('user-photos')
+      .getPublicUrl(filePath)
+
+    return publicUrl
+  } catch (error) {
+    console.error('Error uploading photo:', error)
+    return null
+  }
 }
 
 const closeModal = () => {
@@ -293,15 +696,31 @@ const closeModal = () => {
   resetForm()
 }
 
+const viewUserDetails = (user: User) => {
+  selectedUser.value = user
+  showDetailsModal.value = true
+}
+
 const editUser = (user: User) => {
+  // Close details modal if it's open
+  showDetailsModal.value = false
+
   editingUser.value = user
   formData.value = {
+    first_name: user.first_name || '',
+    last_name: user.last_name || '',
+    middle_name: user.middle_name || '',
+    suffix: user.suffix || '',
     full_name: user.full_name,
     email: user.email,
     role: user.role,
     purok: user.purok || '',
     phone_number: user.phone_number || '',
-    address: user.address || ''
+    address: user.address || '',
+    password: '', // Don't populate password for editing
+    face_verified: user.face_verified || false,
+    photo_url: user.photo_url || '',
+    face_verified_at: user.face_verified_at || ''
   }
   showEditModal.value = true
 }
@@ -316,17 +735,87 @@ const handleSubmit = async () => {
   formError.value = ''
 
   try {
+    // Basic validation
+    if (!formData.value.full_name.trim()) {
+      formError.value = 'Full name is required'
+      return
+    }
+
+    if (!formData.value.email.trim()) {
+      formError.value = 'Email is required'
+      return
+    }
+
+    // Validate photo for Purok Chairman
+    if (formData.value.role === 'purok_chairman' && !showEditModal.value && !photoFile.value) {
+      formError.value = 'Photo is required for Purok Chairman to prevent fake profiles'
+      return
+    }
+
+    // Trim and normalize email
+    formData.value.email = formData.value.email.trim().toLowerCase()
+
+    // More comprehensive email validation
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
+    if (!emailRegex.test(formData.value.email)) {
+      formError.value = 'Please enter a valid email address (e.g., user@gmail.com)'
+      return
+    }
+
+    console.log('Form data before submission:', formData.value)
+
     if (showEditModal.value && editingUser.value) {
-      const { success, error } = await usersStore.updateUser(editingUser.value.id, formData.value)
+      // Remove password field when updating (passwords are in auth.users, not users table)
+      const { password, ...updateData } = formData.value
+
+      // Upload new photo if one was selected
+      if (formData.value.role === 'purok_chairman' && photoFile.value) {
+        const photoUrl = await uploadPhoto(editingUser.value.id)
+        if (photoUrl) {
+          // Add photo data to update
+          updateData.photo_url = photoUrl
+          updateData.face_verified = true
+          updateData.face_verified_at = new Date().toISOString()
+        } else {
+          formError.value = 'Photo upload failed. Please try again.'
+          return
+        }
+      }
+
+      const { success, error } = await usersStore.updateUser(editingUser.value.id, updateData)
       if (!success) {
         formError.value = error || 'Failed to update user'
         return
       }
     } else {
-      const { success, error, password } = await usersStore.addUser(formData.value)
+      // Create user first to get user ID for photo upload
+      const { success, error, password, userId } = await usersStore.addUser(formData.value, formData.value.password || undefined)
       if (!success) {
-        formError.value = error || 'Failed to create user'
+        // Better error handling for common issues
+        if (error?.includes('already registered') || error?.includes('already exists')) {
+          formError.value = 'This email address is already registered in the system'
+        } else if (error?.includes('invalid') && error?.includes('email')) {
+          formError.value = 'Please enter a valid email address'
+        } else {
+          formError.value = error || 'Failed to create user'
+        }
         return
+      }
+
+      // Upload photo if it's a Purok Chairman and photo is selected
+      if (formData.value.role === 'purok_chairman' && photoFile.value && userId) {
+        const photoUrl = await uploadPhoto(userId)
+        if (photoUrl) {
+          // Update user with photo URL and mark as verified
+          await usersStore.updateUser(userId, {
+            photo_url: photoUrl,
+            face_verified: true,
+            face_verified_at: new Date().toISOString()
+          })
+        } else {
+          formError.value = 'User created but photo upload failed. Please edit the user to add photo.'
+          return
+        }
       }
 
       // Show success message with generated password
@@ -366,21 +855,58 @@ const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString()
 }
 
+const formatDateTime = (dateString: string) => {
+  return new Date(dateString).toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+const calculateAge = (dateOfBirth: string): number | null => {
+  if (!dateOfBirth) return null
+
+  const today = new Date()
+  const birthDate = new Date(dateOfBirth)
+  let age = today.getFullYear() - birthDate.getFullYear()
+  const monthDiff = today.getMonth() - birthDate.getMonth()
+
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--
+  }
+
+  return age
+}
+
+const getDisplayAge = (user: User): string => {
+  if (user.age) return user.age.toString()
+  if (user.date_of_birth) {
+    const calculated = calculateAge(user.date_of_birth)
+    return calculated !== null ? calculated.toString() : '-'
+  }
+  return '-'
+}
+
 onMounted(() => {
-  usersStore.fetchUsers()
+  // ✅ Data is already loaded by AdminLayout
+  console.log('👥 Users page using cached data from layout')
 })
 </script>
 
 <style scoped>
 .users-view {
-  space-y: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
 }
 
 .view-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
 }
 
 .header-left {
@@ -401,6 +927,98 @@ onMounted(() => {
 .header-right {
   display: flex;
   gap: 0.75rem;
+}
+
+/* Search and Filter Section */
+.search-filter-section {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0;
+}
+
+.search-box {
+  position: relative;
+  flex: 1;
+  max-width: 500px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.25rem;
+  height: 1.25rem;
+  color: #9ca3af;
+  pointer-events: none;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.75rem 1rem 0.75rem 3rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+  background-color: white;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.search-input::placeholder {
+  color: #9ca3af;
+}
+
+/* Filter Tabs */
+.filter-tabs {
+  display: flex;
+  background-color: white;
+  border-radius: 0.5rem;
+  padding: 0.25rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  margin-bottom: 0;
+}
+
+.filter-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  border: none;
+  background: none;
+  color: #6b7280;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.filter-tab:hover {
+  color: #374151;
+  background-color: #f9fafb;
+}
+
+.filter-tab-active {
+  color: #3b82f6;
+  background-color: #eff6ff;
+}
+
+.filter-count {
+  background-color: #e5e7eb;
+  color: #6b7280;
+  font-size: 0.75rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 9999px;
+  font-weight: 600;
+}
+
+.filter-tab-active .filter-count {
+  background-color: #3b82f6;
+  color: white;
 }
 
 .btn-icon {
@@ -471,6 +1089,170 @@ onMounted(() => {
 .action-buttons {
   display: flex;
   gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.action-buttons .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  flex-shrink: 0;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.action-buttons .btn-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+.action-buttons .btn-text {
+  line-height: 1;
+}
+
+.action-buttons .btn-info {
+  background-color: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+.action-buttons .btn-info:hover {
+  background-color: #2563eb;
+  border-color: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+}
+
+.action-buttons .btn-outline {
+  background-color: white;
+  color: #6b7280;
+  border-color: #d1d5db;
+}
+
+.action-buttons .btn-outline:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+  color: #374151;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.action-buttons .btn-danger {
+  background-color: #ef4444;
+  color: white;
+  border-color: #ef4444;
+}
+
+.action-buttons .btn-danger:hover {
+  background-color: #dc2626;
+  border-color: #dc2626;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+}
+
+/* Verification Badge Styles */
+.verification-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.verification-badge .badge-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+}
+
+.verification-badge.verified {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.verification-badge.unverified {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+/* Badge Styles */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.badge-info {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.badge-warning {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.badge-danger {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.badge-success {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+/* Table Styles */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  vertical-align: middle;
+}
+
+.table th:last-child {
+  text-align: right;
+  padding-right: 1rem;
+}
+
+.table td:last-child {
+  white-space: nowrap;
+  padding-right: 1rem;
 }
 
 .text-sm {
@@ -479,5 +1261,296 @@ onMounted(() => {
 
 .text-gray-600 {
   color: #6b7280;
+}
+
+.form-help {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-top: 0.25rem;
+  display: block;
+}
+
+/* User Details Modal Styles */
+.modal-large {
+  max-width: 800px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.details-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.details-header {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.user-photo-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.user-photo-large {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.user-photo-large img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.user-photo-placeholder {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 3rem;
+  font-weight: 600;
+}
+
+.verification-badges {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.badge-icon {
+  width: 1rem;
+  height: 1rem;
+  margin-right: 0.25rem;
+}
+
+.user-summary {
+  flex: 1;
+}
+
+.user-summary h2 {
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 0.5rem;
+}
+
+.user-email {
+  color: #6b7280;
+  font-size: 1rem;
+  margin-bottom: 1rem;
+}
+
+.badge-large {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.details-section {
+  padding: 1.5rem;
+  background-color: #f9fafb;
+  border-radius: 0.5rem;
+  border: 1px solid #e5e7eb;
+}
+
+.section-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.detail-item-full {
+  grid-column: 1 / -1;
+}
+
+.detail-item label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.detail-item p {
+  font-size: 1rem;
+  color: #111827;
+  font-weight: 500;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  padding: 0.5rem;
+  cursor: pointer;
+  color: #6b7280;
+  border-radius: 0.375rem;
+  transition: all 0.2s;
+}
+
+.modal-close:hover {
+  background-color: #f3f4f6;
+  color: #111827;
+}
+
+.modal-close svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .details-header {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .details-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-large {
+    max-width: 95%;
+  }
+}
+
+/* Photo Upload Styles */
+.photo-upload-container {
+  margin-top: 0.5rem;
+}
+
+.photo-preview {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 2px solid #e5e7eb;
+}
+
+.photo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-remove-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background-color: rgba(239, 68, 68, 0.9);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.photo-remove-btn:hover {
+  background-color: rgba(220, 38, 38, 1);
+  transform: scale(1.1);
+}
+
+.photo-remove-btn svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.photo-upload-box {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  border: 2px dashed #d1d5db;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background-color: #f9fafb;
+}
+
+.photo-upload-box:hover {
+  border-color: #3b82f6;
+  background-color: #eff6ff;
+}
+
+.photo-input {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.upload-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.upload-icon {
+  width: 3rem;
+  height: 3rem;
+  color: #9ca3af;
+}
+
+.upload-text {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6b7280;
+  margin: 0;
+}
+
+.upload-hint {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin: 0;
+}
+
+.text-danger {
+  color: #dc2626;
+}
+
+.text-warning {
+  color: #d97706;
+}
+
+.text-muted {
+  color: #9ca3af;
+  font-size: 0.875rem;
 }
 </style>

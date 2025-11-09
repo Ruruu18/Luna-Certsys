@@ -71,39 +71,39 @@ export const testNetworkConnection = async () => {
   }
 };
 
-export const testSupabaseAuth = async () => {
-  console.log('🔍 Testing Supabase auth specifically...');
-  
+export const testSupabaseAuth = async (email: string, password: string) => {
+  console.log('🔍 Testing Supabase auth...');
+
   try {
-    // Test with admin credentials
-    console.log('Testing admin login...');
+    // Test with provided credentials
+    console.log('Testing login...');
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: 'admin@resare.com',
-      password: 'admin123'
+      email,
+      password
     });
-    
+
     if (error) {
-      console.log('❌ Admin login failed:', error.message);
+      console.log('❌ Login failed:', error.message);
       console.log('Error code:', error.status);
       return false;
     } else {
-      console.log('✅ Admin login successful!');
+      console.log('✅ Login successful!');
       console.log('User ID:', data.user?.id);
       console.log('Email:', data.user?.email);
-      
+
       // Test profile lookup after auth
       const { data: profile, error: profileError } = await supabase
         .from('users')
         .select('*')
         .eq('id', data.user.id)
         .single();
-        
+
       if (profileError) {
         console.log('❌ Profile lookup failed:', profileError.message);
       } else {
         console.log('✅ Profile loaded:', profile.full_name, '-', profile.role);
       }
-      
+
       // Clean up
       await supabase.auth.signOut();
       console.log('✅ Signed out successfully');
@@ -115,16 +115,16 @@ export const testSupabaseAuth = async () => {
   }
 };
 
-export const testFullAuthFlow = async () => {
+export const testFullAuthFlow = async (email: string, password: string) => {
   console.log('\n🚀 Starting comprehensive auth flow test...');
-  
+
   const networkOk = await testNetworkConnection();
-  const authOk = await testSupabaseAuth();
-  
+  const authOk = await testSupabaseAuth(email, password);
+
   console.log('\n📊 Test Results:');
   console.log('Network:', networkOk ? '✅ OK' : '❌ Failed');
   console.log('Auth:', authOk ? '✅ OK' : '❌ Failed');
-  
+
   if (networkOk && authOk) {
     console.log('\n🎉 All tests passed! The mobile app should work correctly.');
   } else {

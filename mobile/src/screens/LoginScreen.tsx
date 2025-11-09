@@ -7,11 +7,10 @@ import {
   StyleSheet,
   Image,
   Alert,
-  KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
   ImageBackground,
-  Dimensions,
+  ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import StatusBarWrapper from '../components/StatusBarWrapper';
@@ -19,8 +18,7 @@ import { theme } from '../styles/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { testNetworkConnection, testSupabaseAuth } from '../utils/networkTest';
 import { NetworkDebugger } from '../components/NetworkDebugger';
-
-const { width, height } = Dimensions.get('window');
+import { dimensions, spacing, fontSize, borderRadius, scale, verticalScale, moderateScale } from '../utils/responsive';
 
 interface LoginScreenProps {
   navigation: any;
@@ -51,10 +49,10 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
 
     setIsLoading(true);
     console.log('Mobile login attempt for:', email);
-    
+
     try {
       const { error } = await signIn(email, password);
-      
+
       if (error) {
         console.error('Mobile login error:', error);
         Alert.alert('Login Failed', error.message || 'Invalid credentials');
@@ -76,10 +74,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <View style={styles.container}>
       <StatusBarWrapper style="light" />
       <ImageBackground
         source={require('../../assets/images/backdrop.png')}
@@ -87,24 +82,29 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         resizeMode="cover"
       >
         <LinearGradient
-          colors={['rgba(0, 0, 0, 0.4)', 'rgba(0, 0, 0, 0.6)', 'rgba(0, 0, 0, 0.8)']}
+          colors={['rgba(0, 0, 0, 0.1)', 'rgba(0, 0, 0, 0.1)', 'rgba(0, 0, 0, 0.15)']}
           style={styles.overlay}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
         >
-          <View style={styles.contentContainer}>
-            {/* Logo Section */}
-            <View style={styles.logoContainer}>
-              <Image
-                source={require('../../assets/images/logo.png')}
-                style={styles.logo}
-                resizeMode="contain"
-              />
-            </View>
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.contentContainer}>
+              {/* Logo Section */}
+              <View style={styles.logoContainer}>
+                <Image
+                  source={require('../../assets/images/logo.png')}
+                  style={styles.logo}
+                  resizeMode="contain"
+                />
+              </View>
 
-            {/* Form Section */}
-            <View style={styles.formContainer}>
-               <View style={styles.formInner}>
+              {/* Form Section */}
+              <View style={styles.formContainer}>
+                <View style={styles.formInner}>
                 <Text style={styles.title}>Welcome Back</Text>
                 <Text style={styles.subtitle}>Sign in to continue</Text>
 
@@ -118,7 +118,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
-                    placeholderTextColor="rgba(255, 255, 255, 0.6)"
+                    placeholderTextColor={Platform.OS === 'ios' ? 'rgba(255, 255, 255, 0.75)' : 'rgba(255, 255, 255, 0.7)'}
                   />
                 </View>
 
@@ -132,7 +132,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                     secureTextEntry
                     autoCapitalize="none"
                     autoCorrect={false}
-                    placeholderTextColor="rgba(255, 255, 255, 0.6)"
+                    placeholderTextColor={Platform.OS === 'ios' ? 'rgba(255, 255, 255, 0.75)' : 'rgba(255, 255, 255, 0.7)'}
                   />
                 </View>
 
@@ -142,13 +142,16 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                   disabled={isLoading}
                 >
                   <LinearGradient
-                    colors={['#1e3c72', '#2a5298']}
+                    colors={['#2563eb', '#3b82f6']}
                     style={styles.buttonGradient}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                   >
                     {isLoading ? (
-                      <ActivityIndicator color="white" size="small" />
+                      <View style={styles.loadingContainer}>
+                        <ActivityIndicator color="white" size="small" style={styles.loadingSpinner} />
+                        <Text style={styles.loadingText}>Welcome...</Text>
+                      </View>
                     ) : (
                       <Text style={styles.loginButtonText}>Sign In</Text>
                     )}
@@ -160,25 +163,18 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                     Don't have an account? <Text style={styles.registerText}>Sign Up</Text>
                   </Text>
                 </TouchableOpacity>
-
-                {/* Debug button */}
-                <TouchableOpacity 
-                  onPress={() => setShowDebugger(true)} 
-                  style={styles.debugButton}
-                >
-                  <Text style={styles.debugButtonText}>🔧 Debug Network</Text>
-                </TouchableOpacity>
+                </View>
               </View>
-             </View>
-          </View>
+            </View>
+          </ScrollView>
         </LinearGradient>
       </ImageBackground>
-      
+
       {/* Network Debugger Overlay */}
       {showDebugger && (
         <NetworkDebugger onClose={() => setShowDebugger(false)} />
       )}
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -194,32 +190,37 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
   },
+  scrollContent: {
+    flexGrow: 1,
+  },
   contentContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: Platform.OS === 'ios' ? 50 : 30,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 30,
+    paddingHorizontal: spacing.lg,
+    paddingTop: verticalScale(40),
+    paddingBottom: verticalScale(30),
+    minHeight: dimensions.height,
   },
   logoContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: theme.spacing.md,
+    marginBottom: 0,
+    flex: 0,
   },
   logo: {
-    width: Math.min(width * 0.7, 300),
-    height: Math.min(width * 0.45, 180),
-    minWidth: 240,
-    minHeight: 120,
+    width: scale(400),
+    height: verticalScale(200),
+    maxWidth: dimensions.width * 0.9,
+    maxHeight: dimensions.height * 0.25,
   },
   formContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: theme.borderRadius.xl,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
+    backgroundColor: Platform.OS === 'ios' ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.25)',
+    borderRadius: borderRadius.xl,
+    borderWidth: Platform.OS === 'ios' ? 2 : 1.5,
+    borderColor: Platform.OS === 'ios' ? 'rgba(255, 255, 255, 0.5)' : 'rgba(255, 255, 255, 0.4)',
     width: '100%',
-    maxWidth: 380,
+    maxWidth: dimensions.isTablet ? 500 : 420,
     elevation: 15,
     shadowColor: '#000',
     shadowOffset: {
@@ -230,52 +231,63 @@ const styles = StyleSheet.create({
     shadowRadius: 15,
   },
   formInner: {
-    padding: theme.spacing.lg + 4,
-    paddingVertical: theme.spacing.lg,
+    padding: spacing.lg,
+    paddingVertical: spacing.xl,
   },
   title: {
-    fontSize: theme.fontSize.xxl + 2,
+    fontSize: fontSize.xxxl,
     fontWeight: theme.fontWeight.bold,
     fontFamily: theme.fontFamily.bold,
     color: 'white',
     textAlign: 'center',
-    marginBottom: theme.spacing.sm,
+    marginBottom: spacing.sm,
     letterSpacing: 0.5,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   subtitle: {
-    fontSize: theme.fontSize.md + 1,
-    fontFamily: theme.fontFamily.regular,
-    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: fontSize.lg,
+    fontFamily: theme.fontFamily.medium,
+    fontWeight: theme.fontWeight.medium,
+    color: 'white',
     textAlign: 'center',
-    marginBottom: theme.spacing.lg + 4,
+    marginBottom: spacing.lg,
     letterSpacing: 0.3,
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   inputContainer: {
-    marginBottom: theme.spacing.lg,
+    marginBottom: spacing.md,
   },
   inputLabel: {
-    fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.medium,
-    fontFamily: theme.fontFamily.medium,
+    fontSize: fontSize.base,
+    fontWeight: theme.fontWeight.semibold,
+    fontFamily: theme.fontFamily.semiBold,
     color: 'white',
-    marginBottom: theme.spacing.sm,
+    marginBottom: spacing.sm,
     letterSpacing: 0.2,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   input: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: theme.borderRadius.md + 2,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md + 4,
-    fontSize: theme.fontSize.md + 1,
+    backgroundColor: Platform.OS === 'ios' ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.2)',
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    fontSize: fontSize.base,
     fontFamily: theme.fontFamily.regular,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
+    borderWidth: Platform.OS === 'ios' ? 2.5 : 2,
+    borderColor: Platform.OS === 'ios' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(255, 255, 255, 0.5)',
     color: 'white',
-    minHeight: 52,
+    minHeight: moderateScale(52),
+    fontWeight: theme.fontWeight.medium,
   },
   loginButton: {
-    borderRadius: theme.borderRadius.md + 4,
-    marginTop: theme.spacing.lg,
+    borderRadius: borderRadius.lg,
+    marginTop: spacing.lg,
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: {
@@ -286,50 +298,57 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
   },
   buttonGradient: {
-    paddingVertical: theme.spacing.lg,
-    borderRadius: theme.borderRadius.md + 4,
+    paddingVertical: spacing.lg,
+    borderRadius: borderRadius.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 54,
+    minHeight: moderateScale(54),
   },
   loginButtonText: {
     color: 'white',
-    fontSize: theme.fontSize.lg + 2,
+    fontSize: fontSize.xl,
     fontWeight: theme.fontWeight.bold,
     fontFamily: theme.fontFamily.bold,
     textAlign: 'center',
     letterSpacing: 0.5,
   },
   registerContainer: {
-    marginTop: theme.spacing.lg + 4,
+    marginTop: spacing.lg,
     alignItems: 'center',
   },
   registerLink: {
     textAlign: 'center',
-    fontSize: theme.fontSize.md,
-    fontFamily: theme.fontFamily.regular,
-    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: fontSize.base,
+    fontFamily: theme.fontFamily.medium,
+    fontWeight: theme.fontWeight.medium,
+    color: 'white',
     letterSpacing: 0.2,
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   registerText: {
     color: 'white',
-    fontWeight: theme.fontWeight.semibold,
-    fontFamily: theme.fontFamily.semiBold,
+    fontWeight: theme.fontWeight.bold,
+    fontFamily: theme.fontFamily.bold,
     textDecorationLine: 'underline',
   },
   loginButtonDisabled: {
     opacity: 0.6,
   },
-  debugButton: {
-    marginTop: theme.spacing.md,
-    padding: theme.spacing.sm,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: theme.borderRadius.sm,
+  loadingContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  debugButtonText: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: theme.fontSize.sm,
-    fontFamily: theme.fontFamily.regular,
+  loadingSpinner: {
+    marginRight: spacing.sm,
+  },
+  loadingText: {
+    color: 'white',
+    fontSize: fontSize.xl,
+    fontWeight: theme.fontWeight.bold,
+    fontFamily: theme.fontFamily.bold,
+    letterSpacing: 0.5,
   },
 });

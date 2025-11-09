@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState } from 'react';
 import {
   View,
@@ -17,9 +16,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { createCertificateRequest } from '../lib/supabase';
+import { dimensions, spacing, fontSize, borderRadius, scale, verticalScale, moderateScale } from '../utils/responsive';
 
 interface RequestCertificateScreenProps {
-  navigation: any;
+  navigation: import('../types/navigation').AppNavigationProp;
 }
 
 interface CertificateRequest {
@@ -48,7 +48,6 @@ export default function RequestCertificateScreen({ navigation }: RequestCertific
     'Certificate of Indigency',
     'Business Permit',
     'Building Permit',
-    'Certificate of Good Moral Character',
   ];
 
   const urgencyOptions = [
@@ -112,7 +111,9 @@ export default function RequestCertificateScreen({ navigation }: RequestCertific
         purpose: formData.purpose,
         status: 'pending' as const,
         notes: formData.additionalNotes,
-        amount: calculateTotalFee()
+        amount: calculateTotalFee(),
+        payment_amount: calculateTotalFee(), // Set payment_amount
+        payment_status: 'pending' as 'pending' | 'paid' | 'failed' | 'refunded', // Initialize payment status
       };
 
       const { data, error } = await createCertificateRequest(requestData);
@@ -123,13 +124,19 @@ export default function RequestCertificateScreen({ navigation }: RequestCertific
         return;
       }
 
+      // Navigate to payment screen
       Alert.alert(
         'Request Submitted',
-        `Your certificate request has been submitted successfully. Total fee: ₱${calculateTotalFee()}. Request ID: ${data?.id?.slice(0, 8)}`,
+        `Your certificate request has been submitted successfully.\n\nTotal fee: ₱${calculateTotalFee()}\nRequest ID: ${data?.id?.slice(0, 8)}\n\nPlease proceed to payment to complete your request.`,
         [
           {
-            text: 'OK',
+            text: 'Pay Now',
             onPress: () => {
+              navigation.navigate('Payment', {
+                certificateRequestId: data.id,
+                amount: calculateTotalFee(),
+                certificateType: formData.certificateType,
+              });
               setFormData({
                 certificateType: '',
                 purpose: '',
@@ -137,6 +144,12 @@ export default function RequestCertificateScreen({ navigation }: RequestCertific
                 urgency: '',
                 additionalNotes: '',
               });
+            }
+          },
+          {
+            text: 'Pay Later',
+            style: 'cancel',
+            onPress: () => {
               navigation.goBack();
             }
           }
@@ -216,7 +229,7 @@ export default function RequestCertificateScreen({ navigation }: RequestCertific
                 {typeof option === 'object' && ` - ₱${option.fee}`}
               </Text>
               {isSelected && (
-                <Ionicons name="checkmark" size={16} color={theme.colors.primary} />
+                <Ionicons name="checkmark" size={moderateScale(16)} color={theme.colors.primary} />
               )}
             </TouchableOpacity>
           );
@@ -240,15 +253,17 @@ export default function RequestCertificateScreen({ navigation }: RequestCertific
         end={{ x: 1, y: 1 }}
       >
         <View style={styles.headerContent}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Ionicons name="arrow-back" size={24} color="white" />
+            <Ionicons name="arrow-back" size={moderateScale(24)} color="white" />
           </TouchableOpacity>
-          
-          <Text style={styles.title}>Request Certificate</Text>
-          
+
+          <View style={styles.headerCenter}>
+            <Text style={styles.title}>Request Certificate</Text>
+          </View>
+
           <View style={styles.headerRight} />
         </View>
       </LinearGradient>
@@ -261,7 +276,7 @@ export default function RequestCertificateScreen({ navigation }: RequestCertific
         <View style={styles.formContainer}>
           <View style={styles.headerSection}>
             <View style={styles.iconContainer}>
-              <Ionicons name="document-text" size={32} color={theme.colors.primary} />
+              <Ionicons name="document-text" size={moderateScale(32)} color={theme.colors.primary} />
             </View>
             <Text style={styles.formTitle}>Certificate Request Form</Text>
             <Text style={styles.formSubtitle}>
@@ -307,7 +322,7 @@ export default function RequestCertificateScreen({ navigation }: RequestCertific
           {formData.urgency && formData.quantity && (
             <View style={styles.feeSection}>
               <View style={styles.feeHeader}>
-                <Ionicons name="receipt-outline" size={20} color={theme.colors.primary} />
+                <Ionicons name="receipt-outline" size={moderateScale(20)} color={theme.colors.primary} />
                 <Text style={styles.feeTitle}>Fee Summary</Text>
               </View>
               <View style={styles.feeRow}>
@@ -325,15 +340,15 @@ export default function RequestCertificateScreen({ navigation }: RequestCertific
             </View>
           )}
 
-          <TouchableOpacity 
-            style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]} 
+          <TouchableOpacity
+            style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
             onPress={handleSubmit}
             disabled={isSubmitting}
           >
             {isSubmitting ? (
               <ActivityIndicator color="white" size="small" />
             ) : (
-              <Ionicons name="send" size={16} color="white" />
+              <Ionicons name="send" size={moderateScale(16)} color="white" />
             )}
             <Text style={styles.submitButtonText}>
               {isSubmitting ? 'Submitting...' : 'Submit Request'}
@@ -351,116 +366,128 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   header: {
-    paddingTop: theme.spacing.md,
-    paddingBottom: theme.spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.lg,
+    paddingHorizontal: spacing.lg,
   },
   backButton: {
-    padding: theme.spacing.sm,
+    width: moderateScale(40),
+    height: moderateScale(40),
+    borderRadius: moderateScale(20),
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: spacing.md,
   },
   title: {
-    fontSize: theme.fontSize.xl,
+    fontSize: fontSize.lg,
     fontWeight: theme.fontWeight.bold,
     fontFamily: theme.fontFamily.bold,
     color: 'white',
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   headerRight: {
-    width: 40,
+    width: moderateScale(40),
   },
   content: {
     flex: 1,
   },
   scrollContent: {
-    padding: theme.spacing.lg,
-    paddingBottom: theme.spacing.xl,
+    padding: spacing.lg,
+    paddingBottom: spacing.xl,
   },
   formContainer: {
     backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.xl,
-    padding: theme.spacing.xl,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 4,
+      height: verticalScale(4),
     },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
+    shadowRadius: moderateScale(8),
     elevation: 5,
   },
   headerSection: {
     alignItems: 'center',
-    marginBottom: theme.spacing.xl,
+    marginBottom: spacing.xl,
   },
   iconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: moderateScale(64),
+    height: moderateScale(64),
+    borderRadius: moderateScale(32),
     backgroundColor: theme.colors.primary + '15',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: theme.spacing.md,
+    marginBottom: spacing.md,
   },
   formTitle: {
-    fontSize: theme.fontSize.xl,
+    fontSize: fontSize.xl,
     fontWeight: theme.fontWeight.bold,
     fontFamily: theme.fontFamily.bold,
     color: theme.colors.text,
-    marginBottom: theme.spacing.xs,
+    marginBottom: spacing.xs,
   },
   formSubtitle: {
-    fontSize: theme.fontSize.md,
+    fontSize: fontSize.md,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: verticalScale(20),
   },
   inputContainer: {
-    marginBottom: theme.spacing.lg,
+    marginBottom: spacing.lg,
   },
   label: {
-    fontSize: theme.fontSize.md,
+    fontSize: fontSize.md,
     fontWeight: theme.fontWeight.medium,
     fontFamily: theme.fontFamily.medium,
     color: theme.colors.text,
-    marginBottom: theme.spacing.sm,
+    marginBottom: spacing.sm,
   },
   required: {
     color: theme.colors.error,
   },
   input: {
     backgroundColor: theme.colors.background,
-    borderRadius: theme.borderRadius.md,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-    fontSize: theme.fontSize.md,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    fontSize: fontSize.md,
     fontFamily: theme.fontFamily.regular,
     borderWidth: 1,
     borderColor: theme.colors.border,
     color: theme.colors.text,
   },
   multilineInput: {
-    height: 100,
+    height: verticalScale(100),
     textAlignVertical: 'top',
   },
   inputError: {
     borderColor: theme.colors.error,
   },
   errorText: {
-    fontSize: theme.fontSize.sm,
+    fontSize: fontSize.sm,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.error,
-    marginTop: theme.spacing.xs,
-    marginLeft: theme.spacing.sm,
+    marginTop: spacing.xs,
+    marginLeft: spacing.sm,
   },
   dropdownContainer: {
     borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: borderRadius.md,
     backgroundColor: theme.colors.background,
     overflow: 'hidden',
   },
@@ -468,8 +495,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
@@ -480,7 +507,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.primary + '10',
   },
   dropdownOptionText: {
-    fontSize: theme.fontSize.md,
+    fontSize: fontSize.md,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.text,
     flex: 1,
@@ -492,35 +519,35 @@ const styles = StyleSheet.create({
   },
   feeSection: {
     backgroundColor: theme.colors.accent,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.lg,
-    marginBottom: theme.spacing.xl,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
   },
   feeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: theme.spacing.md,
+    marginBottom: spacing.md,
   },
   feeTitle: {
-    fontSize: theme.fontSize.lg,
+    fontSize: fontSize.lg,
     fontWeight: theme.fontWeight.semibold,
-    fontFamily: theme.fontFamily.semibold,
+    fontFamily: theme.fontFamily.semiBold,
     color: theme.colors.text,
-    marginLeft: theme.spacing.sm,
+    marginLeft: spacing.sm,
   },
   feeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: theme.spacing.sm,
+    marginBottom: spacing.sm,
   },
   feeLabel: {
-    fontSize: theme.fontSize.sm,
+    fontSize: fontSize.sm,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.textSecondary,
   },
   feeValue: {
-    fontSize: theme.fontSize.sm,
+    fontSize: fontSize.sm,
     color: theme.colors.text,
     fontWeight: theme.fontWeight.medium,
     fontFamily: theme.fontFamily.medium,
@@ -528,18 +555,18 @@ const styles = StyleSheet.create({
   totalFeeRow: {
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
-    paddingTop: theme.spacing.sm,
-    marginTop: theme.spacing.sm,
+    paddingTop: spacing.sm,
+    marginTop: spacing.sm,
     marginBottom: 0,
   },
   totalFeeLabel: {
-    fontSize: theme.fontSize.md,
+    fontSize: fontSize.md,
     color: theme.colors.text,
     fontWeight: theme.fontWeight.semibold,
-    fontFamily: theme.fontFamily.semibold,
+    fontFamily: theme.fontFamily.semiBold,
   },
   totalFeeValue: {
-    fontSize: theme.fontSize.lg,
+    fontSize: fontSize.lg,
     color: theme.colors.primary,
     fontWeight: theme.fontWeight.bold,
     fontFamily: theme.fontFamily.bold,
@@ -549,23 +576,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.colors.primary,
-    paddingVertical: theme.spacing.lg,
-    borderRadius: theme.borderRadius.lg,
+    paddingVertical: spacing.lg,
+    borderRadius: borderRadius.lg,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: verticalScale(2),
     },
     shadowOpacity: 0.2,
-    shadowRadius: 4,
+    shadowRadius: moderateScale(4),
     elevation: 4,
   },
   submitButtonText: {
     color: 'white',
-    fontSize: theme.fontSize.lg,
+    fontSize: fontSize.lg,
     fontWeight: theme.fontWeight.semibold,
-    fontFamily: theme.fontFamily.semibold,
-    marginLeft: theme.spacing.xs,
+    fontFamily: theme.fontFamily.semiBold,
+    marginLeft: spacing.xs,
   },
   submitButtonDisabled: {
     opacity: 0.6,

@@ -29,9 +29,10 @@ export const NetworkDebugger: React.FC<NetworkDebuggerProps> = ({ onClose }) => 
   const runTests = async () => {
     setIsRunning(true);
     setLogs([]);
-    
+
     try {
-      await testFullAuthFlow();
+      // Use test credentials for debugging
+      await testFullAuthFlow('test@example.com', 'testpassword');
     } catch (error) {
       console.log('Test runner error:', error);
     } finally {

@@ -22,8 +22,8 @@ export default function Button({
   textStyle,
 }: ButtonProps) {
   const getButtonStyle = () => {
-    const baseStyle = [styles.button, styles[size]];
-    
+    const baseStyle: any[] = [styles.button, styles[size]];
+
     switch (variant) {
       case 'primary':
         baseStyle.push(styles.primary);
@@ -35,21 +35,21 @@ export default function Button({
         baseStyle.push(styles.outline);
         break;
     }
-    
+
     if (disabled) {
       baseStyle.push(styles.disabled);
     }
-    
+
     if (style) {
       baseStyle.push(style);
     }
-    
+
     return baseStyle;
   };
 
   const getTextStyle = () => {
-    const baseStyle = [styles.text, styles[`${size}Text`]];
-    
+    const baseStyle: any[] = [styles.text, styles[`${size}Text`]];
+
     switch (variant) {
       case 'primary':
         baseStyle.push(styles.primaryText);
@@ -61,15 +61,15 @@ export default function Button({
         baseStyle.push(styles.outlineText);
         break;
     }
-    
+
     if (disabled) {
       baseStyle.push(styles.disabledText);
     }
-    
+
     if (textStyle) {
       baseStyle.push(textStyle);
     }
-    
+
     return baseStyle;
   };
 

@@ -26,6 +26,17 @@ export const useAuthStore = defineStore('auth', () => {
       // Listen for auth changes
       supabase.auth.onAuthStateChange(async (event, newSession) => {
         console.log('Auth state changed:', event, newSession)
+        
+        // Handle specific auth events
+        if (event === 'TOKEN_REFRESHED') {
+          console.log('✅ Token refreshed successfully')
+        } else if (event === 'SIGNED_OUT') {
+          console.log('User signed out')
+          user.value = null
+          session.value = null
+          return
+        }
+        
         session.value = newSession
         if (newSession?.user) {
           await loadUserProfile(newSession.user.id)
@@ -53,56 +64,26 @@ export const useAuthStore = defineStore('auth', () => {
         return
       }
 
-      // For admin users, create a temporary profile if database is having issues
-      if (authUser.email === 'admin@resare.com') {
-        console.log('Admin user detected, creating temporary profile...')
-        user.value = {
-          id: userId,
-          email: authUser.email,
-          full_name: 'System Administrator',
-          role: 'admin' as const,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }
+      // Try database lookup for all users
+      try {
+        const { data: userProfile, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('email', authUser.email)
+          .single()
 
-        // Try to load from database, but don't fail if it doesn't work
-        try {
-          const { data: userProfile, error } = await supabase
-            .from('users')
-            .select('*')
-            .eq('email', authUser.email)
-            .single()
+        console.log('Database profile query result:', { userProfile, error })
 
-          console.log('Database profile query result:', { userProfile, error })
-
-          if (userProfile && !error) {
-            user.value = userProfile
-            console.log('Successfully loaded profile from database')
-          } else {
-            console.log('Using temporary admin profile (database issue)')
-          }
-        } catch (dbError) {
-          console.warn('Database query failed, using temporary profile:', dbError)
-        }
-      } else {
-        // For non-admin users, try database lookup
-        try {
-          const { data: userProfile, error } = await supabase
-            .from('users')
-            .select('*')
-            .eq('email', authUser.email)
-            .single()
-
-          if (error) {
-            console.error('Profile lookup failed for non-admin user:', error)
-            user.value = null
-          } else {
-            user.value = userProfile
-          }
-        } catch (error) {
-          console.error('Exception loading non-admin profile:', error)
+        if (error) {
+          console.error('Profile lookup failed:', error)
           user.value = null
+        } else {
+          user.value = userProfile
+          console.log('Successfully loaded profile from database')
         }
+      } catch (error) {
+        console.error('Exception loading profile:', error)
+        user.value = null
       }
 
     } catch (error) {
@@ -133,6 +114,34 @@ export const useAuthStore = defineStore('auth', () => {
     return { error }
   }
 
+  const handleAuthError = async (error: any) => {
+    console.log('Handling auth error:', error)
+    
+    // Check if it's a refresh token error
+    if (error?.message?.includes('refresh') || 
+        error?.message?.includes('Invalid Refresh Token') ||
+        error?.message?.includes('Refresh Token Not Found')) {
+      console.log('🔄 Refresh token error detected, forcing logout...')
+      
+      // Force a clean logout to clear corrupted session
+      try {
+        await supabase.auth.signOut()
+        user.value = null
+        session.value = null
+        console.log('✅ Forced logout completed')
+      } catch (logoutError) {
+        console.error('Error during forced logout:', logoutError)
+        // Even if logout fails, clear local state
+        user.value = null
+        session.value = null
+      }
+      
+      return { shouldReauth: true }
+    }
+    
+    return { shouldReauth: false }
+  }
+
   return {
     user,
     session,
@@ -142,5 +151,6 @@ export const useAuthStore = defineStore('auth', () => {
     initialize,
     signIn,
     signOut,
+    handleAuthError
   }
 })

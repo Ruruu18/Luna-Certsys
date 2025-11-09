@@ -1,20 +1,20 @@
 export const theme = {
   colors: {
-    primary: '#1e3c72', // Dark blue (matches login button start)
-    secondary: '#2a5298', // Medium blue (matches login button end)
-    background: '#FAFAFA',
-    surface: '#FFFFFF',
+    primary: '#2563eb', // Bright blue (from logo background)
+    secondary: '#3b82f6', // Lighter blue
+    background: '#FFFFFF', // Pure white background
+    surface: '#FAFBFF', // Very light blue-white for cards
     text: '#1F2937',
-    textSecondary: '#6B7280',
-    textTertiary: '#9CA3AF',
+    textSecondary: '#64748b',
+    textTertiary: '#94a3b8',
     error: '#EF4444',
     success: '#10B981',
     warning: '#F59E0B',
     info: '#3B82F6',
-    gradient: ['#F8FAFC', '#F1F5F9', '#E2E8F0'],
-    overlay: 'rgba(0, 0, 0, 0.05)',
-    border: '#E5E7EB',
-    accent: '#F3F4F6',
+    gradient: ['#2563eb', '#3b82f6', '#60a5fa'], // Blue gradient from logo
+    overlay: 'rgba(37, 99, 235, 0.05)', // Very light blue overlay
+    border: '#E2E8F0', // Light gray border (not blue)
+    accent: '#F8FAFC', // Very light gray-blue accent
   },
   spacing: {
     xs: 4,
