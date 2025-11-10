@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Debug Certificates Loading</title>
+  <style>
+    body {
+      font-family: monospace;
+      padding: 20px;
+      background: #1e1e1e;
+      color: #fff;
+    }
+    .section {
+      margin: 20px 0;
+      padding: 15px;
+      background: #2d2d2d;
+      border-radius: 5px;
+    }
+    .error { color: #ff6b6b; }
+    .success { color: #51cf66; }
+    .warning { color: #ffd43b; }
+    .info { color: #74c0fc; }
+    pre {
+      background: #1e1e1e;
+      padding: 10px;
+      border-radius: 3px;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔍 Certificate Loading Debugger</h1>
+
+  <div class="section">
+    <h2>Instructions:</h2>
+    <ol>
+      <li>Open your admin panel in another tab</li>
+      <li>Press F12 to open DevTools</li>
+      <li>Go to Console tab</li>
+      <li>Run this command:</li>
+    </ol>
+    <pre>// Check store state
+const store = window.__VUE_DEVTOOLS_GLOBAL_HOOK__.apps[0]?._instance?.appContext?.config?.globalProperties?.$pinia?._s?.get('certificates')
+console.log('📊 Certificates Store State:', {
+  loading: store?.loading,
+  error: store?.error,
+  certificatesCount: store?.certificates?.length,
+  lastFetch: store?.lastFetch ? new Date(store.lastFetch) : 'never'
+})</pre>
+  </div>
+
+  <div class="section">
+    <h2>Common Issues:</h2>
+    <ul>
+      <li class="error"><strong>loading = true forever:</strong> Fetch failed but error not caught</li>
+      <li class="warning"><strong>certificates = []:</strong> Database query returned no results</li>
+      <li class="error"><strong>error != null:</strong> Permission denied or RLS blocking</li>
+      <li class="info"><strong>lastFetch = 0:</strong> Fetch never completed</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>Quick Fixes:</h2>
+    <p class="success">1. Force clear loading state:</p>
+    <pre>const store = window.__VUE_DEVTOOLS_GLOBAL_HOOK__.apps[0]?._instance?.appContext?.config?.globalProperties?.$pinia?._s?.get('certificates')
+if (store) {
+  store.loading = false
+  console.log('✅ Force cleared loading state')
+}</pre>
+
+    <p class="success">2. Force refresh data:</p>
+    <pre>const store = window.__VUE_DEVTOOLS_GLOBAL_HOOK__.apps[0]?._instance?.appContext?.config?.globalProperties?.$pinia?._s?.get('certificates')
+if (store) {
+  store.fetchCertificates(undefined, true)
+  console.log('🔄 Force refreshing certificates')
+}</pre>
+
+    <p class="warning">3. Check if you're logged in:</p>
+    <pre>const authStore = window.__VUE_DEVTOOLS_GLOBAL_HOOK__.apps[0]?._instance?.appContext?.config?.globalProperties?.$pinia?._s?.get('auth')
+console.log('👤 Current user:', authStore?.user)
+console.log('🔐 Is authenticated:', authStore?.isAuthenticated)</pre>
+  </div>
+
+  <div class="section">
+    <h2>Alternative: Use Vue DevTools Extension</h2>
+    <ol>
+      <li>Install Vue DevTools browser extension</li>
+      <li>Open DevTools → Vue tab</li>
+      <li>Go to Pinia section</li>
+      <li>Check "certificates" store state</li>
+      <li>Look for: loading, error, certificates array</li>
+    </ol>
+  </div>
+</body>
+</html>
