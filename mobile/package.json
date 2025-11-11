@@ -57,6 +57,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
+    "@babel/plugin-transform-template-literals": "^7.25.9",
     "@expo/package-manager": "^1.9.8",
     "@react-native-community/cli": "latest",
     "@react-native/metro-config": "latest",
