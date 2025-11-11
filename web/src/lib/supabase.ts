@@ -185,14 +185,30 @@ export const getUserProfile = async (userId: string) => {
 };
 
 export const updateUserProfile = async (userId: string, updates: Partial<User>) => {
-  const { data, error } = await supabase
-    .from('users')
-    // @ts-ignore - Supabase type inference issue
-    .update(updates as any)
-    .eq('id', userId)
-    .select()
-    .single();
-  return { data, error };
+  try {
+    console.log('🔄 [UPDATE USER] Starting update for user:', userId)
+    console.log('🔄 [UPDATE USER] Update data:', updates)
+
+    // Use admin client to bypass RLS policies
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      // @ts-ignore - Supabase type inference issue
+      .update(updates as any)
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ [UPDATE USER] Update failed:', error)
+      return { data: null, error }
+    }
+
+    console.log('✅ [UPDATE USER] Update successful:', data)
+    return { data, error: null };
+  } catch (err: any) {
+    console.error('❌ [UPDATE USER] Exception:', err)
+    return { data: null, error: err }
+  }
 };
 
 export const getAllUsers = async () => {
@@ -371,8 +387,23 @@ export const createUser = async (userData: Omit<User, 'id' | 'created_at' | 'upd
 
     console.log('✅ Auth user created with ID:', authData.user.id);
 
-    // Step 2: Create database profile using the Auth user's UUID
-    const { data: dbUser, error: dbError } = await supabase
+    // Step 2: Create database profile using the Auth user's UUID (use admin client to bypass RLS)
+    // Build full_name from parts
+    const fullNameParts = [first_name, middle_name, last_name, suffix].filter(Boolean);
+    const full_name = fullNameParts.join(' ');
+
+    console.log('Inserting user into database with data:', {
+      id: authData.user.id,
+      email: userData.email,
+      first_name,
+      last_name,
+      full_name,
+      role: userData.role,
+      purok: userData.purok
+    });
+
+    // Add timeout to prevent infinite loading
+    const insertPromise = supabaseAdmin
       .from('users')
       .insert({
         id: authData.user.id, // ✅ Use Auth UUID to prevent mismatches
@@ -381,19 +412,59 @@ export const createUser = async (userData: Omit<User, 'id' | 'created_at' | 'upd
         middle_name: middle_name || null,
         last_name,
         suffix: suffix || null,
+        full_name, // ✅ Add computed full_name
         role: userData.role,
-        purok: userData.purok,
-        phone_number: userData.phone_number,
-        address: userData.address,
-        purok_chairman_id: userData.purok_chairman_id
+        purok: userData.purok || null,
+        phone_number: userData.phone_number || null,
+        address: userData.address || null,
+        purok_chairman_id: userData.purok_chairman_id || null,
+        // Personal information fields
+        date_of_birth: userData.date_of_birth || null,
+        place_of_birth: userData.place_of_birth || null,
+        gender: userData.gender || null,
+        civil_status: userData.civil_status || null,
+        age: userData.age ? parseInt(userData.age as any, 10) : null,
+        nationality: userData.nationality || null,
+        face_verified: false, // Default values
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       } as any)
       .select()
       .single();
 
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Database insert timeout after 15 seconds. Check RLS policies or database triggers.')), 15000)
+    );
+
+    let dbUser, dbError;
+    try {
+      const result = await Promise.race([insertPromise, timeoutPromise]);
+      dbUser = result.data;
+      dbError = result.error;
+      console.log('Database insert completed:', { dbUser, dbError });
+    } catch (timeoutError) {
+      console.error('Database insert timed out!', timeoutError);
+      dbError = timeoutError;
+    }
+
     if (dbError) {
       console.error('Database user creation failed:', dbError);
-      // TODO: Ideally should cleanup Auth user here, but Supabase admin API is needed
-      console.warn('Auth user was created but database profile failed. Manual cleanup may be needed.');
+      console.error('Database error details:', {
+        message: dbError.message,
+        details: dbError.details,
+        hint: dbError.hint,
+        code: dbError.code
+      });
+
+      // Cleanup: Delete the auth user since database profile creation failed
+      console.log('Cleaning up auth user:', authData.user.id);
+      try {
+        await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+        console.log('✅ Cleaned up orphaned auth user');
+      } catch (cleanupError) {
+        console.error('Failed to cleanup auth user:', cleanupError);
+      }
+
       return { data: null, error: dbError, password: null };
     }
 

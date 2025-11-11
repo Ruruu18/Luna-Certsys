@@ -266,9 +266,33 @@
                 v-model="formData.purok"
                 type="text"
                 class="form-input"
-                placeholder="e.g., 1, 2, 3..."
+                placeholder="e.g., Purok 1, Purok 2, etc."
                 :disabled="formLoading"
               />
+            </div>
+
+            <!-- Purok Chairman selector (only for residents) -->
+            <div v-if="formData.role === 'resident'" class="form-group">
+              <label for="purok_chairman" class="form-label">
+                Purok Chairman
+                <span class="text-muted">(Optional)</span>
+              </label>
+              <select
+                id="purok_chairman"
+                v-model="formData.purok_chairman_id"
+                class="form-select"
+                :disabled="formLoading"
+              >
+                <option value="">-- Select Chairman --</option>
+                <option
+                  v-for="chairman in purokChairmen"
+                  :key="chairman.id"
+                  :value="chairman.id"
+                >
+                  {{ chairman.full_name }} ({{ chairman.purok || 'No Purok' }})
+                </option>
+              </select>
+              <small class="form-help">Assign this resident to their purok chairman</small>
             </div>
 
             <div class="form-group">
@@ -291,6 +315,99 @@
                 rows="3"
                 :disabled="formLoading"
               ></textarea>
+            </div>
+
+            <!-- Personal Information Section -->
+            <div class="section-divider">
+              <h4 class="section-title">Personal Information</h4>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="date_of_birth" class="form-label">Date of Birth</label>
+                <input
+                  id="date_of_birth"
+                  v-model="formData.date_of_birth"
+                  type="date"
+                  class="form-input"
+                  :disabled="formLoading"
+                  @change="autoCalculateAge"
+                />
+              </div>
+
+              <div class="form-group">
+                <label for="place_of_birth" class="form-label">Place of Birth</label>
+                <input
+                  id="place_of_birth"
+                  v-model="formData.place_of_birth"
+                  type="text"
+                  class="form-input"
+                  placeholder="e.g., Surigao del Norte"
+                  :disabled="formLoading"
+                />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="gender" class="form-label">Gender</label>
+                <select
+                  id="gender"
+                  v-model="formData.gender"
+                  class="form-select"
+                  :disabled="formLoading"
+                >
+                  <option value="">-- Select Gender --</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="civil_status" class="form-label">Civil Status</label>
+                <select
+                  id="civil_status"
+                  v-model="formData.civil_status"
+                  class="form-select"
+                  :disabled="formLoading"
+                >
+                  <option value="">-- Select Status --</option>
+                  <option value="Single">Single</option>
+                  <option value="Married">Married</option>
+                  <option value="Widowed">Widowed</option>
+                  <option value="Divorced">Divorced</option>
+                  <option value="Separated">Separated</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="age" class="form-label">Age <span class="text-muted">(Auto-calculated)</span></label>
+                <input
+                  id="age"
+                  v-model="formData.age"
+                  type="number"
+                  class="form-input"
+                  placeholder="Auto-calculated from birthday"
+                  readonly
+                  disabled
+                  style="background-color: #f3f4f6; cursor: not-allowed;"
+                />
+              </div>
+
+              <div class="form-group">
+                <label for="nationality" class="form-label">Nationality</label>
+                <input
+                  id="nationality"
+                  v-model="formData.nationality"
+                  type="text"
+                  class="form-input"
+                  placeholder="e.g., Filipino"
+                  :disabled="formLoading"
+                />
+              </div>
             </div>
 
             <div v-if="!showEditModal" class="form-group">
@@ -333,9 +450,9 @@
     <!-- User Details Modal -->
     <div v-if="showDetailsModal" class="modal" @click="showDetailsModal = false">
       <div class="modal-content modal-large" @click.stop>
-        <div class="modal-header">
+        <div class="modal-header modal-header-with-close">
           <h3 class="modal-title">User Details</h3>
-          <button @click="showDetailsModal = false" class="modal-close">
+          <button @click="showDetailsModal = false" class="modal-close-button">
             <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -584,13 +701,24 @@ const formData = ref({
   email: '',
   role: 'resident' as 'admin' | 'purok_chairman' | 'resident',
   purok: '',
+  purok_chairman_id: '', // Link to chairman
   phone_number: '',
   address: '',
+  // Personal information
+  date_of_birth: '',
+  place_of_birth: '',
+  gender: '',
+  civil_status: '',
+  age: '',
+  nationality: 'Filipino',
   password: '',
   face_verified: false,
   photo_url: '',
   face_verified_at: ''
 })
+
+// List of purok chairmen for selection
+const purokChairmen = ref<User[]>([])
 
 const resetForm = () => {
   formData.value = {
@@ -602,8 +730,16 @@ const resetForm = () => {
     email: '',
     role: 'resident',
     purok: '',
+    purok_chairman_id: '',
     phone_number: '',
     address: '',
+    // Personal information
+    date_of_birth: '',
+    place_of_birth: '',
+    gender: '',
+    civil_status: '',
+    age: '',
+    nationality: 'Filipino',
     password: '',
     face_verified: false,
     photo_url: '',
@@ -616,6 +752,26 @@ const resetForm = () => {
     photoInput.value.value = ''
   }
 }
+
+// Load purok chairmen for selection dropdown
+const loadPurokChairmen = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, full_name, purok')
+      .eq('role', 'purok_chairman')
+      .order('purok')
+
+    if (error) throw error
+    purokChairmen.value = data || []
+    console.log('Loaded', purokChairmen.value.length, 'purok chairmen')
+  } catch (error) {
+    console.error('Error loading chairmen:', error)
+  }
+}
+
+// Load chairmen when component mounts
+loadPurokChairmen()
 
 // Photo handling functions
 const handlePhotoSelect = (event: Event) => {
@@ -661,30 +817,52 @@ const uploadPhoto = async (userId: string): Promise<string | null> => {
   if (!photoFile.value) return null
 
   try {
+    console.log('Starting photo upload for user:', userId)
     const fileExt = photoFile.value.name.split('.').pop()
     const fileName = `${userId}-${Date.now()}.${fileExt}`
     const filePath = `chairmen-photos/${fileName}`
 
-    const { data, error } = await supabase.storage
+    console.log('Uploading to path:', filePath)
+
+    // Add timeout to prevent infinite loading
+    const uploadPromise = supabase.storage
       .from('user-photos')
       .upload(filePath, photoFile.value, {
         cacheControl: '3600',
         upsert: false
       })
 
+    // Add 30 second timeout
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Upload timeout - check if storage bucket exists')), 30000)
+    )
+
+    const { data, error } = await Promise.race([uploadPromise, timeoutPromise]) as any
+
     if (error) {
       console.error('Upload error:', error)
       throw error
     }
+
+    console.log('Upload successful, getting public URL')
 
     // Get public URL
     const { data: { publicUrl } } = supabase.storage
       .from('user-photos')
       .getPublicUrl(filePath)
 
+    console.log('Public URL generated:', publicUrl)
     return publicUrl
   } catch (error) {
     console.error('Error uploading photo:', error)
+    // Show more detailed error to user
+    if (error.message?.includes('timeout')) {
+      formError.value = 'Photo upload timed out. Please check if the storage bucket "user-photos" exists in Supabase.'
+    } else if (error.message?.includes('not found')) {
+      formError.value = 'Storage bucket "user-photos" not found. Please create it in Supabase Storage.'
+    } else {
+      formError.value = `Photo upload failed: ${error.message || 'Unknown error'}`
+    }
     return null
   }
 }
@@ -706,6 +884,10 @@ const editUser = (user: User) => {
   showDetailsModal.value = false
 
   editingUser.value = user
+
+  // Extract personal info fields safely
+  const userWithPersonalInfo = user as any
+
   formData.value = {
     first_name: user.first_name || '',
     last_name: user.last_name || '',
@@ -715,13 +897,30 @@ const editUser = (user: User) => {
     email: user.email,
     role: user.role,
     purok: user.purok || '',
+    purok_chairman_id: userWithPersonalInfo.purok_chairman_id || '',
     phone_number: user.phone_number || '',
     address: user.address || '',
+    // Personal information - load from database
+    date_of_birth: userWithPersonalInfo.date_of_birth || '',
+    place_of_birth: userWithPersonalInfo.place_of_birth || '',
+    gender: userWithPersonalInfo.gender || '',
+    civil_status: userWithPersonalInfo.civil_status || '',
+    age: userWithPersonalInfo.age?.toString() || '',
+    nationality: userWithPersonalInfo.nationality || 'Filipino',
     password: '', // Don't populate password for editing
     face_verified: user.face_verified || false,
     photo_url: user.photo_url || '',
     face_verified_at: user.face_verified_at || ''
   }
+
+  // Auto-calculate age if date_of_birth exists
+  if (formData.value.date_of_birth) {
+    autoCalculateAge()
+  }
+
+  console.log('📝 Editing user:', user.full_name)
+  console.log('📝 Form data loaded:', formData.value)
+
   showEditModal.value = true
 }
 
@@ -768,6 +967,49 @@ const handleSubmit = async () => {
       // Remove password field when updating (passwords are in auth.users, not users table)
       const { password, ...updateData } = formData.value
 
+      // Convert age to number if it exists
+      if (updateData.age) {
+        updateData.age = parseInt(updateData.age as string, 10) as any
+      }
+
+      // Convert empty strings to null for UUID fields and optional fields
+      if (updateData.purok_chairman_id === '') {
+        updateData.purok_chairman_id = null as any
+      }
+      if (updateData.middle_name === '') {
+        updateData.middle_name = null as any
+      }
+      if (updateData.suffix === '') {
+        updateData.suffix = null as any
+      }
+      if (updateData.purok === '') {
+        updateData.purok = null as any
+      }
+      if (updateData.phone_number === '') {
+        updateData.phone_number = null as any
+      }
+      if (updateData.address === '') {
+        updateData.address = null as any
+      }
+      if (updateData.date_of_birth === '') {
+        updateData.date_of_birth = null as any
+      }
+      if (updateData.place_of_birth === '') {
+        updateData.place_of_birth = null as any
+      }
+      if (updateData.gender === '') {
+        updateData.gender = null as any
+      }
+      if (updateData.civil_status === '') {
+        updateData.civil_status = null as any
+      }
+      if (updateData.nationality === '') {
+        updateData.nationality = null as any
+      }
+
+      console.log('📤 Submitting update for user:', editingUser.value.id)
+      console.log('📤 Update data:', updateData)
+
       // Upload new photo if one was selected
       if (formData.value.role === 'purok_chairman' && photoFile.value) {
         const photoUrl = await uploadPhoto(editingUser.value.id)
@@ -785,11 +1027,58 @@ const handleSubmit = async () => {
       const { success, error } = await usersStore.updateUser(editingUser.value.id, updateData)
       if (!success) {
         formError.value = error || 'Failed to update user'
+        console.error('❌ Update failed:', error)
         return
       }
+
+      console.log('✅ User updated successfully')
+      alert('User updated successfully!')
     } else {
+      // Convert age to number before creating user
+      const createData = { ...formData.value }
+      if (createData.age) {
+        createData.age = parseInt(createData.age as string, 10) as any
+      }
+
+      // Convert empty strings to null for UUID fields and optional fields
+      if (createData.purok_chairman_id === '') {
+        createData.purok_chairman_id = null as any
+      }
+      if (createData.middle_name === '') {
+        createData.middle_name = null as any
+      }
+      if (createData.suffix === '') {
+        createData.suffix = null as any
+      }
+      if (createData.purok === '') {
+        createData.purok = null as any
+      }
+      if (createData.phone_number === '') {
+        createData.phone_number = null as any
+      }
+      if (createData.address === '') {
+        createData.address = null as any
+      }
+      if (createData.date_of_birth === '') {
+        createData.date_of_birth = null as any
+      }
+      if (createData.place_of_birth === '') {
+        createData.place_of_birth = null as any
+      }
+      if (createData.gender === '') {
+        createData.gender = null as any
+      }
+      if (createData.civil_status === '') {
+        createData.civil_status = null as any
+      }
+      if (createData.nationality === '') {
+        createData.nationality = null as any
+      }
+
+      console.log('📤 Creating new user with data:', createData)
+
       // Create user first to get user ID for photo upload
-      const { success, error, password, userId } = await usersStore.addUser(formData.value, formData.value.password || undefined)
+      const { success, error, password, userId } = await usersStore.addUser(createData, createData.password || undefined)
       if (!success) {
         // Better error handling for common issues
         if (error?.includes('already registered') || error?.includes('already exists')) {
@@ -887,6 +1176,19 @@ const getDisplayAge = (user: User): string => {
     return calculated !== null ? calculated.toString() : '-'
   }
   return '-'
+}
+
+// Auto-calculate age when date of birth changes
+const autoCalculateAge = () => {
+  if (formData.value.date_of_birth) {
+    const calculatedAge = calculateAge(formData.value.date_of_birth)
+    if (calculatedAge !== null) {
+      formData.value.age = calculatedAge.toString()
+      console.log('✅ Age auto-calculated:', calculatedAge)
+    }
+  } else {
+    formData.value.age = ''
+  }
 }
 
 onMounted(() => {
@@ -1405,6 +1707,36 @@ onMounted(() => {
   font-weight: 500;
 }
 
+.modal-header-with-close {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-close-button {
+  background: none;
+  border: none;
+  padding: 0.5rem;
+  cursor: pointer;
+  color: #6b7280;
+  border-radius: 0.375rem;
+  transition: all 0.2s;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-close-button:hover {
+  background-color: #f3f4f6;
+  color: #111827;
+}
+
+.modal-close-button svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
 .modal-close {
   background: none;
   border: none;
@@ -1552,5 +1884,24 @@ onMounted(() => {
 .text-muted {
   color: #9ca3af;
   font-size: 0.875rem;
+}
+
+/* Section Divider and Form Row Styles */
+.section-divider {
+  margin: 1.5rem 0 1rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 640px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

@@ -116,8 +116,8 @@ export default function RegistrationScreen({ navigation }: RegistrationScreenPro
     }
   };
 
-  // Generate purok options dynamically from chairmen data
-  const purokOptions = ['', ...purokChairmen.filter(chairman => chairman.purok).map(chairman => chairman.purok)];
+  // Generate purok options for Purok 1-33
+  const purokOptions = ['', ...Array.from({ length: 33 }, (_, i) => `Purok ${i + 1}`)];
 
   // Get chairman name for selected purok
   const getChairmanForPurok = (purok: string) => {
@@ -444,12 +444,22 @@ export default function RegistrationScreen({ navigation }: RegistrationScreenPro
   ) => {
     closeAllDropdowns();
 
-    if (!showDropdown) {
-      // Always set dropdown to open upward for better UX
-      setDropdownPosition(prev => ({
-        ...prev,
-        [field]: 'up'
-      }));
+    if (!showDropdown && buttonRef.current) {
+      // Measure button position to determine dropdown direction
+      buttonRef.current.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
+        const screenHeight = dimensions.height;
+        const dropdownHeight = 200; // Approximate max dropdown height
+        const spaceBelow = screenHeight - (pageY + height);
+        const spaceAbove = pageY;
+
+        // Open upward if there's more space above or not enough space below
+        const shouldOpenUpward = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+
+        setDropdownPosition(prev => ({
+          ...prev,
+          [field]: shouldOpenUpward ? 'up' : 'down'
+        }));
+      });
     }
 
     setShowDropdown(!showDropdown);
@@ -468,7 +478,7 @@ export default function RegistrationScreen({ navigation }: RegistrationScreenPro
     const isUpward = dropdownPosition[field as string] === 'up';
 
     return (
-      <View style={styles.inputContainer}>
+      <View style={[styles.inputContainer, showDropdown && styles.inputContainerActive]}>
         <Text style={styles.label}>
           {label} {isRequired && <Text style={styles.required}>*</Text>}
         </Text>
@@ -789,6 +799,18 @@ export default function RegistrationScreen({ navigation }: RegistrationScreenPro
                       <Text style={styles.chairmanName}>{getChairmanForPurok(formData.purok)}</Text>
                       <Text style={styles.chairmanNote}>
                         Your registration will be sent to this chairman for approval
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {formData.purok && !getChairmanForPurok(formData.purok) && (
+                  <View style={[styles.chairmanInfoCard, { backgroundColor: theme.colors.warning + '10', borderColor: theme.colors.warning + '30' }]}>
+                    <Ionicons name="information-circle" size={moderateScale(32)} color={theme.colors.warning} />
+                    <View style={styles.chairmanInfoText}>
+                      <Text style={[styles.chairmanLabel, { color: theme.colors.warning }]}>No Chairman Assigned</Text>
+                      <Text style={styles.chairmanNote}>
+                        Your purok doesn't have a chairman yet. Your registration will be reviewed by the barangay administrator.
                       </Text>
                     </View>
                   </View>
@@ -1192,6 +1214,9 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(14),
     position: 'relative',
     zIndex: 1,
+  },
+  inputContainerActive: {
+    zIndex: 9999,
   },
   label: {
     fontSize: fontSize.md,

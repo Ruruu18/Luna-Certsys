@@ -25,6 +25,9 @@ import MapScreen from '../screens/MapScreen';
 import PaymentScreen from '../screens/PaymentScreen';
 import PaymentConfirmationScreen from '../screens/PaymentConfirmationScreen';
 import EmailTestScreen from '../screens/EmailTestScreen';
+import TermsScreen from '../screens/TermsScreen';
+import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
+import MyPurokChairmanScreen from '../screens/MyPurokChairmanScreen';
 import CustomDrawerContent from '../components/CustomDrawerContent';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -154,6 +157,18 @@ export default function AppNavigator() {
         <Stack.Screen
           name="EmailTest"
           component={EmailTestScreen}
+        />
+        <Stack.Screen
+          name="Terms"
+          component={TermsScreen}
+        />
+        <Stack.Screen
+          name="PrivacyPolicy"
+          component={PrivacyPolicyScreen}
+        />
+        <Stack.Screen
+          name="MyPurokChairman"
+          component={MyPurokChairmanScreen}
         />
       </Stack.Navigator>
     </NavigationContainer>

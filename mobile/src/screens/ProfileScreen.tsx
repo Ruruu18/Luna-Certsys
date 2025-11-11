@@ -140,20 +140,21 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       },
       {
         icon: 'document-text-outline',
-        title: 'Terms & Policies',
-        subtitle: 'Read our terms and privacy policy',
+        title: 'Terms of Service',
+        subtitle: 'Read our terms and conditions',
         color: theme.colors.secondary,
-        onPress: () => {
-          Alert.alert(
-            'Terms & Policies',
-            'View our:\n\n• Terms of Service\n• Privacy Policy\n• Data Protection Guidelines\n• User Agreement\n\nComing soon!',
-            [{ text: 'OK' }]
-          );
-        },
+        onPress: () => navigation.navigate('Terms'),
+      },
+      {
+        icon: 'shield-outline',
+        title: 'Privacy Policy',
+        subtitle: 'View our privacy policy',
+        color: theme.colors.success,
+        onPress: () => navigation.navigate('PrivacyPolicy'),
       },
     ];
 
-    // Only residents can edit their profile
+    // Only residents can edit their profile and see their chairman
     if (user?.role === 'resident') {
       return [
         {
@@ -162,6 +163,13 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           subtitle: 'Update your personal information',
           color: theme.colors.primary,
           onPress: () => navigation.navigate('EditProfile'),
+        },
+        {
+          icon: 'person-circle-outline',
+          title: 'My Purok Chairman',
+          subtitle: 'View your purok chairman details',
+          color: theme.colors.info,
+          onPress: () => navigation.navigate('MyPurokChairman'),
         },
         ...commonActions,
       ];
