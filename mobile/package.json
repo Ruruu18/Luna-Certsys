@@ -21,6 +21,7 @@
     "@supabase/supabase-js": "^2.56.0",
     "arg": "^5.0.2",
     "color": "^4.2.3",
+    "color-string": "^1.9.1",
     "expo": "^54.0.23",
     "expo-asset": "~12.0.9",
     "expo-camera": "~17.0.9",
