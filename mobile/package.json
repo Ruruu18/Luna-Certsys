@@ -26,6 +26,7 @@
     "arg": "^5.0.2",
     "assert": "^2.1.0",
     "badgin": "^1.2.3",
+    "base64-arraybuffer": "^1.0.2",
     "color": "^4.2.3",
     "color-string": "^1.9.1",
     "css-select": "^5.2.2",
