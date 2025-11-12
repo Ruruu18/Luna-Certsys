@@ -132,7 +132,7 @@ const requestsStore = useCertificateRequestsStore()
 const showUserMenu = ref(false)
 const currentTime = ref('')
 const currentDate = ref('')
-let timeInterval: NodeJS.Timeout | null = null
+let timeInterval: ReturnType<typeof setInterval> | null = null
 
 const updateDateTime = () => {
   const now = new Date()

@@ -478,7 +478,7 @@ export const createUser = async (userData: Omit<User, 'id' | 'created_at' | 'upd
 
     let dbUser, dbError;
     try {
-      const result = await Promise.race([insertPromise, timeoutPromise]);
+      const result = await Promise.race([insertPromise, timeoutPromise]) as any;
       dbUser = result.data;
       dbError = result.error;
       console.log('Database insert completed:', { dbUser, dbError });

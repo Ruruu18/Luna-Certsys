@@ -14,7 +14,7 @@ export const useCertificateRequestsStore = defineStore('certificateRequests', ()
   const error = ref<string | null>(null)
   const lastFetch = ref<number>(0)
   const CACHE_TIME = 5000 // 5 seconds cache
-  let fetchTimeout: NodeJS.Timeout | null = null
+  let fetchTimeout: ReturnType<typeof setTimeout> | null = null
 
   const fetchRequests = async (userId?: string, forceRefresh = false) => {
     // Clear any existing timeout first
@@ -146,10 +146,10 @@ export const useCertificateRequestsStore = defineStore('certificateRequests', ()
       if (data) {
         console.log('✅ [STORE] Update successful, updating local state')
         const index = requests.value.findIndex(r => r.id === requestId)
-        if (index !== -1) {
+        if (index !== -1 && data) {
           // Preserve the users relation from the existing data
           requests.value[index] = {
-            ...data,
+            ...(data as any),
             users: requests.value[index].users
           }
           console.log('✅ [STORE] Local state updated')

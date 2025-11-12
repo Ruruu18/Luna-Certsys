@@ -14,7 +14,7 @@ export const useUsersStore = defineStore('users', () => {
   const error = ref<string | null>(null)
   const lastFetch = ref<number>(0)
   const CACHE_TIME = 5000 // 5 seconds cache
-  let fetchTimeout: NodeJS.Timeout | null = null
+  let fetchTimeout: ReturnType<typeof setTimeout> | null = null
 
   const fetchUsers = async (forceRefresh = false) => {
     // Clear any existing timeout first
