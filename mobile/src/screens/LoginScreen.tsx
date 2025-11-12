@@ -82,7 +82,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         resizeMode="cover"
       >
         <LinearGradient
-          colors={['rgba(0, 0, 0, 0.1)', 'rgba(0, 0, 0, 0.1)', 'rgba(0, 0, 0, 0.15)']}
+          colors={['rgba(0, 0, 0, 0.2)', 'rgba(0, 0, 0, 0.25)', 'rgba(0, 0, 0, 0.3)']}
           style={styles.overlay}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
@@ -118,7 +118,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
-                    placeholderTextColor={Platform.OS === 'ios' ? 'rgba(255, 255, 255, 0.75)' : 'rgba(255, 255, 255, 0.7)'}
+                    placeholderTextColor="rgba(255, 255, 255, 0.75)"
                   />
                 </View>
 
@@ -132,7 +132,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                     secureTextEntry
                     autoCapitalize="none"
                     autoCorrect={false}
-                    placeholderTextColor={Platform.OS === 'ios' ? 'rgba(255, 255, 255, 0.75)' : 'rgba(255, 255, 255, 0.7)'}
+                    placeholderTextColor="rgba(255, 255, 255, 0.75)"
                   />
                 </View>
 
@@ -198,15 +198,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
-    paddingTop: verticalScale(40),
-    paddingBottom: verticalScale(30),
+    paddingTop: verticalScale(20),
+    paddingBottom: verticalScale(20),
     minHeight: dimensions.height,
   },
   logoContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 0,
-    flex: 0,
+    marginBottom: spacing.sm,
   },
   logo: {
     width: scale(400),
@@ -215,10 +214,10 @@ const styles = StyleSheet.create({
     maxHeight: dimensions.height * 0.25,
   },
   formContainer: {
-    backgroundColor: Platform.OS === 'ios' ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.25)',
+    backgroundColor: 'rgba(0, 0, 0, 0.15)',
     borderRadius: borderRadius.xl,
-    borderWidth: Platform.OS === 'ios' ? 2 : 1.5,
-    borderColor: Platform.OS === 'ios' ? 'rgba(255, 255, 255, 0.5)' : 'rgba(255, 255, 255, 0.4)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
     width: '100%',
     maxWidth: dimensions.isTablet ? 500 : 420,
     elevation: 15,
@@ -273,14 +272,14 @@ const styles = StyleSheet.create({
     textShadowRadius: 2,
   },
   input: {
-    backgroundColor: Platform.OS === 'ios' ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     fontSize: fontSize.base,
     fontFamily: theme.fontFamily.regular,
-    borderWidth: Platform.OS === 'ios' ? 2.5 : 2,
-    borderColor: Platform.OS === 'ios' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(255, 255, 255, 0.5)',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
     color: 'white',
     minHeight: moderateScale(52),
     fontWeight: theme.fontWeight.medium,
