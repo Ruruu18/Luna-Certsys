@@ -1070,13 +1070,13 @@ const handleSubmit = async () => {
         } else if (photoRemoved.value && editingUser.value.photo_url) {
           // User explicitly removed the photo - delete it from storage
           await deleteOldPhoto(editingUser.value.photo_url)
-          updateData.photo_url = null
+          updateData.photo_url = null as any
           updateData.face_verified = false
-          updateData.face_verified_at = null
+          updateData.face_verified_at = null as any
         }
       }
 
-      const { success, error } = await usersStore.updateUser(editingUser.value.id, updateData)
+      const { success, error } = await usersStore.updateUser(editingUser.value.id, updateData as any)
       if (!success) {
         formError.value = error || 'Failed to update user'
         console.error('❌ Update failed:', error)
@@ -1130,7 +1130,7 @@ const handleSubmit = async () => {
       console.log('📤 Creating new user with data:', createData)
 
       // Create user first to get user ID for photo upload
-      const { success, error, password, userId } = await usersStore.addUser(createData, createData.password || undefined)
+      const { success, error, password, userId } = await usersStore.addUser(createData as any, createData.password || undefined)
       if (!success) {
         // Better error handling for common issues
         if (error?.includes('already registered') || error?.includes('already exists')) {
