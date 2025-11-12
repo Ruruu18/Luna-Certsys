@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Resare",
+    "name": "Luna Certsys",
     "slug": "resare-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/logo.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/splash.png",

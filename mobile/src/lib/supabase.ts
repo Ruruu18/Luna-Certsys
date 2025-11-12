@@ -6,6 +6,10 @@ import * as Crypto from 'expo-crypto';
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
+// Debug logging
+console.log('Supabase URL:', supabaseUrl ? `${supabaseUrl.substring(0, 20)}...` : 'MISSING');
+console.log('Supabase Key:', supabaseAnonKey ? 'PRESENT' : 'MISSING');
+
 // Validate environment variables
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error(
