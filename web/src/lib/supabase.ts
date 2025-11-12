@@ -578,10 +578,19 @@ export const createCertificateRequest = async (requestData: Omit<CertificateRequ
 };
 
 export const updateCertificateRequest = async (requestId: string, updates: Partial<CertificateRequest>) => {
+  // Filter out undefined values - Supabase doesn't handle them well
+  // Convert undefined to null for fields that should be cleared
+  const cleanUpdates: Record<string, any> = {};
+  Object.entries(updates).forEach(([key, value]) => {
+    if (value !== undefined) {
+      cleanUpdates[key] = value;
+    }
+  });
+
   const { data, error } = await supabase
     .from('certificate_requests')
     // @ts-ignore - Supabase type inference issue
-    .update(updates as any)
+    .update(cleanUpdates as any)
     .eq('id', requestId)
     .select()
     .single();

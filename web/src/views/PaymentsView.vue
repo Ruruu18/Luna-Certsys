@@ -689,12 +689,12 @@ const handleDeletePayment = async () => {
   formLoading.value = true
 
   try {
-    // Clear payment info from the certificate request
+    // Clear payment info from the certificate request (set to null to remove)
     const result = await certificateRequestsStore.updateRequestStatus(paymentToDelete.value.id, {
-      payment_status: 'pending',
-      payment_method: undefined,
-      payment_date: undefined,
-      payment_amount: undefined
+      payment_status: null,
+      payment_method: null,
+      payment_date: null,
+      payment_amount: null
     })
 
     if (!result.success) {
