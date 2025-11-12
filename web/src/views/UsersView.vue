@@ -817,10 +817,43 @@ const removePhoto = () => {
   }
 }
 
-const uploadPhoto = async (userId: string): Promise<string | null> => {
+const deleteOldPhoto = async (photoUrl: string): Promise<void> => {
+  try {
+    // Extract the file path from the public URL
+    const urlParts = photoUrl.split('/storage/v1/object/public/user-photos/')
+    if (urlParts.length < 2) {
+      console.log('Could not extract file path from URL:', photoUrl)
+      return
+    }
+
+    const filePath = urlParts[1]
+    console.log('Deleting old photo:', filePath)
+
+    const { error } = await supabase.storage
+      .from('user-photos')
+      .remove([filePath])
+
+    if (error) {
+      console.error('Error deleting old photo:', error)
+      // Don't throw - we still want to upload the new photo even if delete fails
+    } else {
+      console.log('✅ Old photo deleted successfully')
+    }
+  } catch (error) {
+    console.error('Exception deleting old photo:', error)
+    // Don't throw - we still want to upload the new photo
+  }
+}
+
+const uploadPhoto = async (userId: string, oldPhotoUrl?: string): Promise<string | null> => {
   if (!photoFile.value) return null
 
   try {
+    // Delete old photo first if it exists
+    if (oldPhotoUrl) {
+      await deleteOldPhoto(oldPhotoUrl)
+    }
+
     console.log('Starting photo upload for user:', userId)
     const fileExt = photoFile.value.name.split('.').pop()
     const fileName = `${userId}-${Date.now()}.${fileExt}`
@@ -857,7 +890,7 @@ const uploadPhoto = async (userId: string): Promise<string | null> => {
 
     console.log('Public URL generated:', publicUrl)
     return publicUrl
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error uploading photo:', error)
     // Show more detailed error to user
     if (error.message?.includes('timeout')) {
@@ -1019,17 +1052,27 @@ const handleSubmit = async () => {
       console.log('📤 Submitting update for user:', editingUser.value.id)
       console.log('📤 Update data:', updateData)
 
-      // Upload new photo if one was selected
-      if (formData.value.role === 'purok_chairman' && photoFile.value) {
-        const photoUrl = await uploadPhoto(editingUser.value.id)
-        if (photoUrl) {
-          // Add photo data to update
-          updateData.photo_url = photoUrl
-          updateData.face_verified = true
-          updateData.face_verified_at = new Date().toISOString()
-        } else {
-          formError.value = 'Photo upload failed. Please try again.'
-          return
+      // Handle photo changes for purok chairman
+      if (formData.value.role === 'purok_chairman') {
+        if (photoFile.value) {
+          // Upload new photo if one was selected
+          const oldPhotoUrl = editingUser.value.photo_url
+          const photoUrl = await uploadPhoto(editingUser.value.id, oldPhotoUrl)
+          if (photoUrl) {
+            // Add photo data to update
+            updateData.photo_url = photoUrl
+            updateData.face_verified = true
+            updateData.face_verified_at = new Date().toISOString()
+          } else {
+            formError.value = 'Photo upload failed. Please try again.'
+            return
+          }
+        } else if (photoRemoved.value && editingUser.value.photo_url) {
+          // User explicitly removed the photo - delete it from storage
+          await deleteOldPhoto(editingUser.value.photo_url)
+          updateData.photo_url = null
+          updateData.face_verified = false
+          updateData.face_verified_at = null
         }
       }
 
