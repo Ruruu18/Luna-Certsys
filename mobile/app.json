@@ -46,6 +46,12 @@
           "color": "#ffffff"
         }
       ],
+      [
+        "react-native-maps",
+        {
+          "googleMapsApiKey": "AIzaSyDd3iUez-1WXYCUd-n_RoLWO_YN8OElRtQ"
+        }
+      ],
       "expo-asset",
       "expo-font"
     ],
