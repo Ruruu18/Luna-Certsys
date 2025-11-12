@@ -55,6 +55,8 @@ export default function MapScreen({ navigation }: MapScreenProps) {
   const [directionsDuration, setDirectionsDuration] = useState<string>('');
   const [distanceToDestination, setDistanceToDestination] = useState<number | null>(null);
   const slideAnim = useRef(new Animated.Value(-300)).current;
+  const isAnimating = useRef(false); // Prevent double-click issues
+  const markerPressTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // Barangay Luna main location (Barangay Hall)
   // Exact coordinates from Google Maps - Plus Code: QF7M+F6V
@@ -166,6 +168,15 @@ export default function MapScreen({ navigation }: MapScreenProps) {
     sitioPayawan2Marker,
     // Add more puroks here later
   ];
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (markerPressTimeout.current) {
+        clearTimeout(markerPressTimeout.current);
+      }
+    };
+  }, []);
 
   // Request location permission and start tracking
   useEffect(() => {
@@ -284,30 +295,61 @@ export default function MapScreen({ navigation }: MapScreenProps) {
   }, [userLocation, showDirections, selectedMarker]);
 
   const handleMarkerPress = (marker: PurokMarker) => {
-    // Close directions when selecting a new marker
-    if (showDirections) {
-      setShowDirections(false);
-      setDirectionsDistance('');
-      setDirectionsDuration('');
-      setDistanceToDestination(null);
+    // Debounce: Prevent rapid double-click crashes
+    if (isAnimating.current) {
+      console.log('Ignoring marker press - animation in progress');
+      return;
     }
 
-    setSelectedMarker(marker);
-    // Animate info panel
-    Animated.spring(slideAnim, {
-      toValue: 0,
-      useNativeDriver: true,
-      tension: 50,
-      friction: 8,
-    }).start();
+    // Clear any pending timeouts
+    if (markerPressTimeout.current) {
+      clearTimeout(markerPressTimeout.current);
+    }
 
-    // Center map on marker
-    if (mapRef.current && marker.coordinate) {
-      mapRef.current.animateToRegion({
-        ...marker.coordinate,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      }, 500);
+    isAnimating.current = true;
+
+    try {
+      // Close directions when selecting a new marker
+      if (showDirections) {
+        setShowDirections(false);
+        setDirectionsDistance('');
+        setDirectionsDuration('');
+        setDistanceToDestination(null);
+      }
+
+      setSelectedMarker(marker);
+
+      // Animate info panel
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 50,
+        friction: 8,
+      }).start(() => {
+        // Reset animation flag after animation completes
+        isAnimating.current = false;
+      });
+
+      // Center map on marker with error handling
+      if (mapRef.current && marker.coordinate) {
+        try {
+          mapRef.current.animateToRegion({
+            ...marker.coordinate,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          }, 500);
+        } catch (mapError) {
+          console.error('Error animating map region:', mapError);
+        }
+      }
+
+      // Reset animation flag after timeout as backup
+      markerPressTimeout.current = setTimeout(() => {
+        isAnimating.current = false;
+      }, 1000);
+    } catch (error) {
+      console.error('Error handling marker press:', error);
+      isAnimating.current = false;
     }
   };
 
@@ -337,28 +379,43 @@ export default function MapScreen({ navigation }: MapScreenProps) {
   };
 
   const openDirections = () => {
-    if (!selectedMarker || !userLocation) {
-      Alert.alert('Location Required', 'Please enable location services to get directions from your current location.');
-      return;
-    }
+    try {
+      if (!selectedMarker || !userLocation) {
+        Alert.alert('Location Required', 'Please enable location services to get directions from your current location.');
+        return;
+      }
 
-    // Show directions inside the map
-    setShowDirections(true);
+      if (!GOOGLE_MAPS_APIKEY) {
+        Alert.alert('Configuration Error', 'Google Maps API key is not configured. Directions are unavailable.');
+        return;
+      }
 
-    // Fit the map to show both origin and destination
-    if (mapRef.current) {
-      mapRef.current.fitToCoordinates(
-        [userLocation, selectedMarker.coordinate],
-        {
-          edgePadding: {
-            top: verticalScale(100),
-            right: scale(50),
-            bottom: verticalScale(350),
-            left: scale(50),
-          },
-          animated: true,
+      // Show directions inside the map
+      setShowDirections(true);
+
+      // Fit the map to show both origin and destination with error handling
+      if (mapRef.current) {
+        try {
+          mapRef.current.fitToCoordinates(
+            [userLocation, selectedMarker.coordinate],
+            {
+              edgePadding: {
+                top: verticalScale(100),
+                right: scale(50),
+                bottom: verticalScale(350),
+                left: scale(50),
+              },
+              animated: true,
+            }
+          );
+        } catch (fitError) {
+          console.error('Error fitting map coordinates:', fitError);
+          // Continue anyway - directions will still work
         }
-      );
+      }
+    } catch (error) {
+      console.error('Error opening directions:', error);
+      Alert.alert('Error', 'Unable to open directions. Please try again.');
     }
   };
 
@@ -427,7 +484,7 @@ export default function MapScreen({ navigation }: MapScreenProps) {
         showsTraffic={false}
       >
         {/* Directions Route */}
-        {showDirections && userLocation && selectedMarker && (
+        {showDirections && userLocation && selectedMarker && GOOGLE_MAPS_APIKEY && (
           <MapViewDirections
             origin={userLocation}
             destination={selectedMarker.coordinate}
@@ -435,35 +492,52 @@ export default function MapScreen({ navigation }: MapScreenProps) {
             strokeWidth={5}
             strokeColor={theme.colors.primary}
             optimizeWaypoints={true}
+            mode="DRIVING"
+            resetOnChange={false}
             onStart={(params) => {
-              console.log(`Started routing between "${params.origin}" and "${params.destination}"`);
+              try {
+                console.log(`Started routing between "${params.origin}" and "${params.destination}"`);
+              } catch (error) {
+                console.error('Error in onStart:', error);
+              }
             }}
             onReady={(result) => {
-              console.log(`Distance: ${result.distance} km`);
-              console.log(`Duration: ${result.duration} min.`);
-              setDirectionsDistance(`${result.distance.toFixed(1)} km`);
-              setDirectionsDuration(`${Math.round(result.duration)} min`);
+              try {
+                console.log(`Distance: ${result.distance} km`);
+                console.log(`Duration: ${result.duration} min.`);
+                setDirectionsDistance(`${result.distance.toFixed(1)} km`);
+                setDirectionsDuration(`${Math.round(result.duration)} min`);
+              } catch (error) {
+                console.error('Error in onReady:', error);
+              }
             }}
             onError={(errorMessage) => {
-              console.error('Directions Error:', errorMessage);
+              try {
+                console.error('Directions Error:', errorMessage);
 
-              // Check if it's an API not enabled error
-              if (errorMessage.includes('legacy API') || errorMessage.includes('not enabled')) {
-                Alert.alert(
-                  'API Not Enabled',
-                  'The Directions API is not enabled in your Google Cloud Console.\n\n' +
-                  '1. Go to console.cloud.google.com\n' +
-                  '2. Select your project\n' +
-                  '3. Go to "APIs & Services" → "Library"\n' +
-                  '4. Search "Directions API" and click ENABLE\n\n' +
-                  'See GOOGLE_MAPS_SETUP.md for details.',
-                  [{ text: 'OK' }]
-                );
-              } else {
-                Alert.alert('Directions Error', 'Unable to find route. Please check your internet connection.');
+                // Safely close directions on error
+                setShowDirections(false);
+                setDirectionsDistance('');
+                setDirectionsDuration('');
+
+                // Check if it's an API not enabled error
+                if (errorMessage && (errorMessage.includes('legacy API') || errorMessage.includes('not enabled'))) {
+                  Alert.alert(
+                    'API Not Enabled',
+                    'The Directions API is not enabled in your Google Cloud Console.\n\n' +
+                    '1. Go to console.cloud.google.com\n' +
+                    '2. Select your project\n' +
+                    '3. Go to "APIs & Services" → "Library"\n' +
+                    '4. Search "Directions API" and click ENABLE',
+                    [{ text: 'OK' }]
+                  );
+                } else {
+                  Alert.alert('Directions Error', 'Unable to find route. Please check your internet connection.');
+                }
+              } catch (error) {
+                console.error('Error in onError handler:', error);
+                setShowDirections(false);
               }
-
-              setShowDirections(false);
             }}
           />
         )}
@@ -474,7 +548,13 @@ export default function MapScreen({ navigation }: MapScreenProps) {
             coordinate={marker.coordinate}
             title={marker.name}
             description={marker.description}
-            onPress={() => handleMarkerPress(marker)}
+            onPress={() => {
+              try {
+                handleMarkerPress(marker);
+              } catch (error) {
+                console.error('Error in marker press:', error);
+              }
+            }}
           >
             <View style={styles.markerContainer}>
               <View style={[

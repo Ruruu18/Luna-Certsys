@@ -1,6 +1,6 @@
 // Import URL polyfill for Supabase compatibility
 import 'react-native-url-polyfill/auto';
-import React from 'react';
+import React, { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { Text, View, StyleSheet } from 'react-native';
 import 'react-native-gesture-handler';
@@ -8,6 +8,7 @@ import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, P
 import * as SplashScreen from 'expo-splash-screen';
 import AppNavigator from './src/navigation/AppNavigator';
 import { AuthProvider } from './src/contexts/AuthContext';
+import AnimatedSplashScreen from './src/components/AnimatedSplashScreen';
 
 // Simple Error Boundary Component
 class ErrorBoundary extends React.Component<
@@ -56,6 +57,7 @@ if (!__DEV__) {
 SplashScreen.preventAutoHideAsync();
 
 export default function App() {
+  const [showAnimatedSplash, setShowAnimatedSplash] = useState(true);
   const [fontsLoaded] = useFonts({
     Poppins_400Regular,
     Poppins_500Medium,
@@ -71,6 +73,10 @@ export default function App() {
 
   if (!fontsLoaded) {
     return null;
+  }
+
+  if (showAnimatedSplash) {
+    return <AnimatedSplashScreen onFinish={() => setShowAnimatedSplash(false)} />;
   }
 
   return (

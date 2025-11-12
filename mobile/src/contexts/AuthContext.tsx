@@ -57,10 +57,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state change event:', event, session?.user?.id);
-      
+
       // Handle specific auth events
       if (event === 'TOKEN_REFRESHED') {
         console.log('✅ Token refreshed successfully');
+        setSession(session);
+        // No need to reload profile - only the token changed
+        return;
+      } else if (event === 'USER_UPDATED') {
+        console.log('✅ User auth updated (e.g., password changed)');
+        setSession(session);
+        // No need to reload profile - only auth credentials changed, not profile data
+        return;
       } else if (event === 'SIGNED_OUT') {
         console.log('User signed out');
         setUser(null);
@@ -68,7 +76,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setLoading(false);
         return;
       }
-      
+
       setSession(session);
       if (session?.user) {
         await loadUserProfile(session.user.id);

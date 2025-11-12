@@ -21,7 +21,9 @@ import {
   createPaymentIntent,
   createPaymentMethod,
   attachPaymentMethod,
-  getPaymentStatus
+  getPaymentStatus,
+  createCheckoutSession,
+  getCheckoutSessionStatus
 } from '../services/paymongoService';
 import { supabase } from '../lib/supabase';
 import { dimensions, spacing, fontSize, borderRadius, scale, verticalScale, moderateScale } from '../utils/responsive';
@@ -48,6 +50,7 @@ export default function PaymentScreen({ navigation, route }: PaymentScreenProps)
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentSource, setPaymentSource] = useState<any>(null);
   const [paymentIntent, setPaymentIntent] = useState<any>(null);
+  const [checkoutSession, setCheckoutSession] = useState<any>(null);
   const [isPolling, setIsPolling] = useState(false);
   const [countdown, setCountdown] = useState(600); // 10 minutes
 
@@ -74,7 +77,7 @@ export default function PaymentScreen({ navigation, route }: PaymentScreenProps)
 
   // Countdown timer
   useEffect(() => {
-    if (paymentSource && isPolling && countdown > 0) {
+    if ((paymentSource || checkoutSession) && isPolling && countdown > 0) {
       const timer = setInterval(() => {
         setCountdown(prev => prev - 1);
       }, 1000);
@@ -84,18 +87,18 @@ export default function PaymentScreen({ navigation, route }: PaymentScreenProps)
     if (countdown === 0) {
       handlePaymentTimeout();
     }
-  }, [paymentSource, isPolling, countdown]);
+  }, [paymentSource, checkoutSession, isPolling, countdown]);
 
   // Poll payment status
   useEffect(() => {
-    if (paymentSource && isPolling) {
+    if ((paymentSource || checkoutSession) && isPolling) {
       const interval = setInterval(async () => {
         await checkPaymentStatus();
       }, 5000); // Check every 5 seconds
 
       return () => clearInterval(interval);
     }
-  }, [paymentSource, isPolling]);
+  }, [paymentSource, checkoutSession, isPolling]);
 
   const handlePaymentTimeout = () => {
     setIsPolling(false);
@@ -112,7 +115,7 @@ export default function PaymentScreen({ navigation, route }: PaymentScreenProps)
   };
 
   const checkPaymentStatus = async () => {
-    if (!paymentSource && !paymentIntent) return;
+    if (!paymentSource && !checkoutSession) return;
 
     try {
       let status = '';
@@ -124,10 +127,31 @@ export default function PaymentScreen({ navigation, route }: PaymentScreenProps)
         const sourceData = await getSourceStatus(paymentSource.id);
         status = sourceData.attributes.status;
         referenceId = paymentSource.id;
+        console.log('GCash payment status:', status);
       } else if (selectedMethod === 'paymaya') {
-        // PayMaya uses Payment Intents API
-        status = await getPaymentStatus(paymentIntent.id);
-        referenceId = paymentIntent.id;
+        // PayMaya uses Checkout Sessions API
+        const sessionData = await getCheckoutSessionStatus(checkoutSession.id);
+
+        console.log('===== CHECKOUT SESSION STATUS DEBUG =====');
+        console.log('Full session data:', JSON.stringify(sessionData, null, 2));
+        console.log('Session status:', sessionData.attributes.status);
+        console.log('Payment intent status:', sessionData.attributes.payment_intent?.attributes?.status);
+        console.log('Payments array:', sessionData.attributes.payments);
+        console.log('==========================================');
+
+        // For checkout sessions, check the payment_intent status or if there are payments
+        const paymentIntentStatus = sessionData.attributes.payment_intent?.attributes?.status;
+        const hasPayments = sessionData.attributes.payments && sessionData.attributes.payments.length > 0;
+
+        // If there are completed payments, consider it paid
+        if (hasPayments) {
+          status = 'paid';
+        } else {
+          status = paymentIntentStatus || sessionData.attributes.status;
+        }
+
+        referenceId = checkoutSession.id;
+        console.log('Determined status:', status);
       }
 
       if (status === 'chargeable' || status === 'paid' || status === 'succeeded') {
@@ -154,7 +178,7 @@ export default function PaymentScreen({ navigation, route }: PaymentScreenProps)
               text: 'Retry',
               onPress: () => {
                 setPaymentSource(null);
-                setPaymentIntent(null);
+                setCheckoutSession(null);
                 setSelectedMethod(null);
               },
             },
@@ -174,7 +198,7 @@ export default function PaymentScreen({ navigation, route }: PaymentScreenProps)
     try {
       const updateData: any = {
         payment_status: paymentStatus,
-        payment_reference: paymentSource?.id,
+        payment_reference: paymentSource?.id || checkoutSession?.id,
         payment_amount: amount, // Set the payment amount
         updated_at: new Date().toISOString(),
       };
@@ -224,24 +248,26 @@ export default function PaymentScreen({ navigation, route }: PaymentScreenProps)
           })
           .eq('id', certificateRequestId);
       } else {
-        // PayMaya: Use Payment Intents API
-        // Step 1: Create payment intent
-        const intent = await createPaymentIntent(
+        // PayMaya: Use Checkout Sessions API (works like GCash)
+        const session = await createCheckoutSession(
           amount,
-          `${certificateType} - Request ID: ${certificateRequestId.slice(0, 8)}`
+          `${certificateType} - Request ID: ${certificateRequestId.slice(0, 8)}`,
+          'paymaya'
         );
 
-        // Step 2: Create payment method for PayMaya
-        const paymentMethod = await createPaymentMethod(intent.id, 'paymaya');
+        console.log('===== PAYMAYA CHECKOUT DEBUG =====');
+        console.log('Full Checkout Session:', JSON.stringify(session, null, 2));
+        console.log('Checkout URL:', session?.attributes?.checkout_url);
+        console.log('Payment Intent ID:', session?.attributes?.payment_intent?.id);
+        console.log('Status:', session?.attributes?.status);
+        console.log('==================================');
 
-        // Step 3: Attach payment method to get redirect URL
-        const attachedIntent = await attachPaymentMethod(
-          intent.id,
-          paymentMethod.id,
-          'https://barangayluna.gov.ph/payment/success'
-        );
+        // Check if we got a valid checkout session
+        if (!session || !session.attributes || !session.attributes.checkout_url) {
+          throw new Error('Invalid checkout session response from PayMongo');
+        }
 
-        setPaymentIntent(attachedIntent);
+        setCheckoutSession(session);
         setIsPolling(true);
         setCountdown(600); // Reset countdown
 
@@ -251,7 +277,7 @@ export default function PaymentScreen({ navigation, route }: PaymentScreenProps)
           .update({
             payment_status: 'pending',
             payment_method: method.type,
-            payment_reference: intent.id,
+            payment_reference: session.id,
           })
           .eq('id', certificateRequestId);
       }
@@ -273,8 +299,8 @@ export default function PaymentScreen({ navigation, route }: PaymentScreenProps)
 
     if (selectedMethod === 'gcash' && paymentSource?.attributes?.redirect?.checkout_url) {
       checkoutUrl = paymentSource.attributes.redirect.checkout_url;
-    } else if (selectedMethod === 'paymaya' && paymentIntent?.attributes?.next_action?.redirect?.url) {
-      checkoutUrl = paymentIntent.attributes.next_action.redirect.url;
+    } else if (selectedMethod === 'paymaya' && checkoutSession?.attributes?.checkout_url) {
+      checkoutUrl = checkoutSession.attributes.checkout_url;
     }
 
     if (checkoutUrl) {
@@ -305,7 +331,7 @@ export default function PaymentScreen({ navigation, route }: PaymentScreenProps)
               amount,
               certificateRequestId,
               paymentMethod: selectedMethod,
-              paymentReference: paymentSource?.id || paymentIntent?.id || 'TEST-' + certificateRequestId.slice(0, 8),
+              paymentReference: paymentSource?.id || checkoutSession?.id || 'TEST-' + certificateRequestId.slice(0, 8),
             });
           },
         },
@@ -326,8 +352,8 @@ export default function PaymentScreen({ navigation, route }: PaymentScreenProps)
         styles.methodCard,
         selectedMethod === method.type && styles.selectedMethodCard,
       ]}
-      onPress={() => !isProcessing && !paymentSource && handlePaymentMethodSelect(method)}
-      disabled={isProcessing || !!paymentSource}
+      onPress={() => !isProcessing && !paymentSource && !checkoutSession && handlePaymentMethodSelect(method)}
+      disabled={isProcessing || !!paymentSource || !!checkoutSession}
       activeOpacity={0.7}
     >
       <View style={[styles.methodIcon, { backgroundColor: method.color + '20' }]}>
@@ -337,10 +363,10 @@ export default function PaymentScreen({ navigation, route }: PaymentScreenProps)
         <Text style={styles.methodName}>{method.name}</Text>
         <Text style={styles.methodDescription}>{method.description}</Text>
       </View>
-      {selectedMethod === method.type && !paymentSource && (
+      {selectedMethod === method.type && !paymentSource && !checkoutSession && (
         <ActivityIndicator size="small" color={method.color} />
       )}
-      {selectedMethod === method.type && (
+      {selectedMethod === method.type && (paymentSource || checkoutSession) && (
         <Ionicons name="checkmark-circle" size={moderateScale(24)} color={theme.colors.success} />
       )}
     </TouchableOpacity>
@@ -355,12 +381,12 @@ export default function PaymentScreen({ navigation, route }: PaymentScreenProps)
 
       <View style={styles.qrContainer}>
         {(selectedMethod === 'gcash' && paymentSource?.attributes?.redirect?.checkout_url) ||
-         (selectedMethod === 'paymaya' && paymentIntent?.attributes?.next_action?.redirect?.url) ? (
+         (selectedMethod === 'paymaya' && checkoutSession?.attributes?.checkout_url) ? (
           <QRCode
             value={
               selectedMethod === 'gcash'
                 ? paymentSource.attributes.redirect.checkout_url
-                : paymentIntent.attributes.next_action.redirect.url
+                : checkoutSession.attributes.checkout_url
             }
             size={dimensions.width * 0.6}
             color="black"
@@ -428,7 +454,7 @@ export default function PaymentScreen({ navigation, route }: PaymentScreenProps)
         onPress={() => {
           setIsPolling(false);
           setPaymentSource(null);
-          setPaymentIntent(null);
+          setCheckoutSession(null);
           setSelectedMethod(null);
         }}
       >
@@ -512,7 +538,7 @@ export default function PaymentScreen({ navigation, route }: PaymentScreenProps)
         </View>
 
         {/* Payment Methods or QR Code */}
-        {!paymentSource && !paymentIntent ? (
+        {!paymentSource && !checkoutSession ? (
           <View style={styles.methodsSection}>
             <Text style={styles.sectionTitle}>Select Payment Method</Text>
             <Text style={styles.sectionSubtitle}>Choose your preferred payment option</Text>
@@ -869,5 +895,24 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     marginLeft: spacing.sm,
     lineHeight: verticalScale(16),
+  },
+  paymayaIcon: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+  },
+  paymayaText: {
+    fontSize: fontSize.xl,
+    fontWeight: theme.fontWeight.bold,
+    fontFamily: theme.fontFamily.bold,
+    color: theme.colors.text,
+    marginTop: spacing.md,
+  },
+  paymayaSubtext: {
+    fontSize: fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.textSecondary,
+    marginTop: spacing.xs,
+    textAlign: 'center',
   },
 });

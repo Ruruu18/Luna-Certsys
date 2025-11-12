@@ -417,10 +417,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useCertificatesStore } from '../stores/certificates'
 import { useCertificateRequestsStore } from '../stores/certificateRequests'
 import { useUsersStore } from '../stores/users'
+import { supabase } from '../lib/supabase'
 import type { Certificate, CertificateRequest, User } from '../lib/supabase'
 
 const certificatesStore = useCertificatesStore()
@@ -713,6 +714,40 @@ const formatStatus = (status: string) => {
   if (status === 'in_progress') return 'In Progress'
   return status.charAt(0).toUpperCase() + status.slice(1)
 }
+
+let certificatesSubscription: any = null
+
+onMounted(() => {
+  console.log('📜 Certificates page mounted')
+
+  // Set up real-time subscription for certificates
+  console.log('📡 Setting up real-time subscription for certificates...')
+  certificatesSubscription = supabase
+    .channel('certificates_changes')
+    .on(
+      'postgres_changes',
+      {
+        event: '*', // Listen to INSERT, UPDATE, DELETE
+        schema: 'public',
+        table: 'certificates'
+      },
+      (payload) => {
+        console.log('🔔 Certificates real-time update:', payload.eventType, payload)
+        // Refetch all certificates to update the list
+        certificatesStore.fetchCertificates()
+      }
+    )
+    .subscribe((status) => {
+      console.log('📡 Certificates subscription status:', status)
+    })
+})
+
+onUnmounted(() => {
+  console.log('🔌 Unsubscribing from certificates changes')
+  if (certificatesSubscription) {
+    certificatesSubscription.unsubscribe()
+  }
+})
 </script>
 
 <style scoped>

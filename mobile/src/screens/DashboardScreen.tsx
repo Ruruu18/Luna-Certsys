@@ -712,7 +712,9 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
             {user?.role === 'purok_chairman' ? 'Manage your purok community' : 'What would you like to do today?'}
           </Text>
           {user?.role === 'purok_chairman' && user?.purok && (
-            <Text style={styles.purokBodyText}>Purok {user.purok}</Text>
+            <Text style={styles.purokBodyText}>
+              {user.purok.toLowerCase().startsWith('purok') ? user.purok : `Purok ${user.purok}`}
+            </Text>
           )}
         </View>
 

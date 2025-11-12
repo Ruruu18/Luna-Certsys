@@ -190,10 +190,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useUsersStore } from '../stores/users'
 import { useCertificatesStore } from '../stores/certificates'
 import { useCertificateRequestsStore } from '../stores/certificateRequests'
+import { supabase } from '../lib/supabase'
 
 const usersStore = useUsersStore()
 const certificatesStore = useCertificatesStore()
@@ -292,6 +293,8 @@ const recentUsers = computed(() =>
   usersStore.users.slice(0, 3)
 )
 
+let dashboardSubscriptions: any[] = []
+
 onMounted(() => {
   // ✅ Data is already loaded by AdminLayout, just stop loading spinner
   console.log('📊 Dashboard using cached data from layout')
@@ -299,6 +302,68 @@ onMounted(() => {
   console.log('Mobile app requests:', requestsStore.requests.length)
   console.log('Users:', usersStore.users.length)
   loading.value = false
+
+  // Set up real-time subscriptions for dashboard stats
+  console.log('📡 Setting up real-time subscriptions for dashboard...')
+
+  // Subscribe to users table changes
+  const usersSubscription = supabase
+    .channel('dashboard_users')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'users'
+      },
+      (payload) => {
+        console.log('🔔 Dashboard users update:', payload.eventType)
+        usersStore.fetchUsers()
+      }
+    )
+    .subscribe()
+
+  // Subscribe to certificate_requests table changes
+  const requestsSubscription = supabase
+    .channel('dashboard_requests')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'certificate_requests'
+      },
+      (payload) => {
+        console.log('🔔 Dashboard requests update:', payload.eventType)
+        requestsStore.fetchRequests()
+      }
+    )
+    .subscribe()
+
+  // Subscribe to certificates table changes
+  const certificatesSubscription = supabase
+    .channel('dashboard_certificates')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'certificates'
+      },
+      (payload) => {
+        console.log('🔔 Dashboard certificates update:', payload.eventType)
+        certificatesStore.fetchCertificates()
+      }
+    )
+    .subscribe()
+
+  dashboardSubscriptions = [usersSubscription, requestsSubscription, certificatesSubscription]
+})
+
+onUnmounted(() => {
+  console.log('🔌 Unsubscribing from dashboard changes')
+  dashboardSubscriptions.forEach(sub => sub.unsubscribe())
+  dashboardSubscriptions = []
 })
 </script>
 

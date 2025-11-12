@@ -25,6 +25,27 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: false,
     storageKey: 'supabase.auth.token',
   },
+  db: {
+    schema: 'public',
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'supabase-js-react-native',
+    },
+    // Custom fetch with timeout for Android network issues
+    fetch: (url, options = {}) => {
+      const timeout = 30000; // 30 second timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+      return fetch(url, {
+        ...options,
+        signal: controller.signal,
+      }).finally(() => {
+        clearTimeout(timeoutId);
+      });
+    },
+  },
 });
 
 // Listen for auth state changes and handle refresh token errors silently

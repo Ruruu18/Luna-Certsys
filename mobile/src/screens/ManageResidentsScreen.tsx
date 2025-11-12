@@ -73,6 +73,36 @@ export default function ManageResidentsScreen({ navigation }: ManageResidentsScr
     }
   }, [user]);
 
+  // Real-time subscription for residents list
+  useEffect(() => {
+    if (user?.role !== 'purok_chairman' || !user?.id) return;
+
+    console.log('📡 Setting up real-time subscription for residents...');
+    const subscription = supabase
+      .channel('manage_residents_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'users',
+        },
+        (payload) => {
+          console.log('🔔 Residents real-time update:', payload.eventType);
+          // Refetch residents when any user changes
+          fetchResidents();
+        }
+      )
+      .subscribe((status) => {
+        console.log('📡 Residents subscription status:', status);
+      });
+
+    return () => {
+      console.log('🔌 Unsubscribing from residents changes');
+      subscription.unsubscribe();
+    };
+  }, [user?.id, user?.role]);
+
   const calculateAge = (birthDate: Date) => {
     const today = new Date();
     let age = today.getFullYear() - birthDate.getFullYear();
@@ -106,15 +136,37 @@ export default function ManageResidentsScreen({ navigation }: ManageResidentsScr
   const fetchResidents = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+
+      // Helper function to normalize purok for comparison (handles both "Purok 1" and "1" formats)
+      const normalizePurok = (purok: string) => {
+        if (!purok) return '';
+        // Extract just the number from formats like "Purok 1" or "1"
+        const match = purok.match(/\d+/);
+        return match ? match[0] : purok;
+      };
+
+      // Fetch all residents
+      const { data: allResidents, error } = await supabase
         .from('users')
         .select('*')
-        .eq('purok_chairman_id', user?.id)
         .eq('role', 'resident')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setResidents(data || []);
+
+      // Filter residents that either:
+      // 1. Have this chairman as their purok_chairman_id, OR
+      // 2. Have a matching purok (normalized to handle "1" vs "Purok 1")
+      const normalizedChairmanPurok = user?.purok ? normalizePurok(user.purok) : '';
+      const filteredResidents = (allResidents || []).filter((resident: any) => {
+        const hasMatchingChairman = resident.purok_chairman_id === user?.id;
+        const normalizedResidentPurok = resident.purok ? normalizePurok(resident.purok) : '';
+        const hasMatchingPurok = normalizedChairmanPurok && normalizedResidentPurok === normalizedChairmanPurok;
+
+        return hasMatchingChairman || hasMatchingPurok;
+      });
+
+      setResidents(filteredResidents);
     } catch (error) {
       console.error('Error fetching residents:', error);
       Alert.alert('Error', 'Failed to load residents');

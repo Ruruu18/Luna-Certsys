@@ -43,7 +43,7 @@ export async function sendEmail(params: EmailParams): Promise<{ success: boolean
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: params.from || 'Luna CERTSYS <enariomharjade@gmail.com>', // Using verified email for testing
+        from: params.from || 'Luna CERTSYS <onboarding@resend.dev>', // Resend testing domain (no verification needed)
         to: [params.to],
         subject: params.subject,
         html: params.html,

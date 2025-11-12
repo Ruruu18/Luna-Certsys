@@ -101,6 +101,9 @@ export default function SimpleFaceCapture({ onCapture, onCancel }: SimpleFaceCap
         photoUri,
         [
           {
+            flip: ImageManipulator.FlipType.Horizontal, // Un-mirror the front camera photo
+          },
+          {
             crop: {
               originX: x,
               originY: y,

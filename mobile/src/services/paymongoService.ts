@@ -141,7 +141,7 @@ export const attachPaymentMethod = async (
           data: {
             attributes: {
               payment_method: paymentMethodId,
-              return_url: returnUrl || 'https://barangayluna.gov.ph/payment/success',
+              return_url: returnUrl || 'https://paymongo.com/redirect', // PayMongo requires HTTPS
             },
           },
         }),
@@ -186,8 +186,8 @@ export const createPaymentSource = async (
           attributes: {
             amount: amount * 100, // Convert to centavos
             redirect: {
-              success: 'https://barangayluna.gov.ph/payment/success',
-              failed: 'https://barangayluna.gov.ph/payment/failed',
+              success: 'https://paymongo.com/redirect', // PayMongo requires HTTPS
+              failed: 'https://paymongo.com/redirect', // PayMongo requires HTTPS
             },
             type,
             currency: 'PHP',
@@ -265,6 +265,93 @@ export const getSourceStatus = async (sourceId: string): Promise<any> => {
     return data.data;
   } catch (error) {
     console.error('PayMongo Source Status Error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Create a PayMongo Checkout Session (for PayMaya with QR code)
+ * This generates a hosted checkout page with a URL that can be shown as QR code
+ * @param amount - Amount in pesos
+ * @param description - Payment description
+ * @param paymentMethod - Payment method type (paymaya, gcash, etc.)
+ * @returns Checkout session with URL
+ */
+export const createCheckoutSession = async (
+  amount: number,
+  description: string,
+  paymentMethod: string = 'paymaya'
+): Promise<any> => {
+  try {
+    const response = await fetch(`${PAYMONGO_CONFIG.API_URL}/checkout_sessions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Basic ${btoa(`${PAYMONGO_CONFIG.SECRET_KEY}:`)}`,
+      },
+      body: JSON.stringify({
+        data: {
+          attributes: {
+            send_email_receipt: false,
+            show_description: true,
+            show_line_items: true,
+            description,
+            line_items: [
+              {
+                currency: 'PHP',
+                amount: amount * 100, // Convert to centavos
+                name: description,
+                quantity: 1,
+              },
+            ],
+            payment_method_types: [paymentMethod],
+            success_url: 'https://paymongo.com/redirect',
+            cancel_url: 'https://paymongo.com/redirect',
+          },
+        },
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.errors?.[0]?.detail || 'Failed to create checkout session');
+    }
+
+    return data.data;
+  } catch (error) {
+    console.error('PayMongo Checkout Session Error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get checkout session status
+ * @param checkoutSessionId - Checkout session ID
+ * @returns Checkout session status and details
+ */
+export const getCheckoutSessionStatus = async (checkoutSessionId: string): Promise<any> => {
+  try {
+    const response = await fetch(
+      `${PAYMONGO_CONFIG.API_URL}/checkout_sessions/${checkoutSessionId}`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${btoa(`${PAYMONGO_CONFIG.SECRET_KEY}:`)}`,
+        },
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.errors?.[0]?.detail || 'Failed to get checkout session status');
+    }
+
+    return data.data;
+  } catch (error) {
+    console.error('PayMongo Checkout Session Status Error:', error);
     throw error;
   }
 };

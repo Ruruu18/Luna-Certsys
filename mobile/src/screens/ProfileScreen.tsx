@@ -274,7 +274,10 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           </Text>
 
           {user?.role === 'resident' ? (
-            <TouchableOpacity style={styles.editProfileButton}>
+            <TouchableOpacity
+              style={styles.editProfileButton}
+              onPress={() => navigation.navigate('EditProfile')}
+            >
               <Ionicons name="create" size={moderateScale(16)} color="white" />
               <Text style={styles.editProfileText}>Edit Profile</Text>
             </TouchableOpacity>

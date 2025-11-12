@@ -83,38 +83,57 @@ export default function ChangePasswordScreen({ navigation }: ChangePasswordScree
     setIsSubmitting(true);
 
     try {
-      // Verify current password by attempting to sign in
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: user?.email || '',
-        password: currentPassword,
-      });
+      console.log('Attempting to change password for user:', user?.email);
 
-      if (signInError) {
-        Alert.alert('Error', 'Current password is incorrect');
+      // For security, verify current password first
+      // But use a more reliable method that works for all user types
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError || !sessionData.session) {
+        Alert.alert('Error', 'Your session has expired. Please log in again.');
         setIsSubmitting(false);
         return;
       }
 
+      // Verify current password by re-authenticating
+      const { error: reAuthError } = await supabase.auth.signInWithPassword({
+        email: user?.email || '',
+        password: currentPassword,
+      });
+
+      if (reAuthError) {
+        console.error('Current password verification failed:', reAuthError);
+        Alert.alert('Error', 'Current password is incorrect. Please try again.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      console.log('Current password verified, updating to new password...');
+
       // Update to new password
-      const { error: updateError } = await supabase.auth.updateUser({
+      const { data: updateData, error: updateError } = await supabase.auth.updateUser({
         password: newPassword,
       });
 
       if (updateError) {
+        console.error('Password update error:', updateError);
         throw updateError;
       }
 
+      console.log('Password updated successfully:', updateData);
+
+      // Clear form
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+
       Alert.alert(
         'Success',
-        'Your password has been changed successfully! Please use your new password for future logins.',
+        'Password changed successfully!',
         [
           {
             text: 'OK',
             onPress: () => {
-              // Clear form
-              setCurrentPassword('');
-              setNewPassword('');
-              setConfirmPassword('');
               // Navigate back
               navigation.goBack();
             },
@@ -123,7 +142,16 @@ export default function ChangePasswordScreen({ navigation }: ChangePasswordScree
       );
     } catch (error: any) {
       console.error('Error changing password:', error);
-      Alert.alert('Error', error.message || 'Failed to change password. Please try again.');
+      const errorMessage = error.message || 'Failed to change password. Please try again.';
+
+      // Provide more helpful error messages
+      if (errorMessage.includes('session')) {
+        Alert.alert('Session Expired', 'Your session has expired. Please log in again and try changing your password.');
+      } else if (errorMessage.includes('network')) {
+        Alert.alert('Network Error', 'Unable to connect to the server. Please check your internet connection and try again.');
+      } else {
+        Alert.alert('Error', errorMessage);
+      }
     } finally {
       setIsSubmitting(false);
     }

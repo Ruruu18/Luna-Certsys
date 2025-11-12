@@ -7,10 +7,11 @@
     "icon": "./assets/images/logo.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "scheme": "lunacertsys",
     "splash": {
-      "image": "./assets/images/splash.png",
-      "resizeMode": "cover",
-      "backgroundColor": "#5daedb"
+      "image": "./assets/images/splash-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#00BFFF"
     },
     "ios": {
       "supportsTablet": true,

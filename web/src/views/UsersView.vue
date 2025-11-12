@@ -222,7 +222,7 @@
                 <span v-else class="text-muted">(Optional - update only if needed)</span>
               </label>
               <div class="photo-upload-container">
-                <div v-if="photoPreview || (showEditModal && editingUser?.photo_url && !photoPreview)" class="photo-preview">
+                <div v-if="photoPreview || (showEditModal && editingUser?.photo_url && !photoRemoved)" class="photo-preview">
                   <img :src="photoPreview || editingUser?.photo_url" alt="Chairman photo" />
                   <button
                     type="button"
@@ -623,7 +623,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useUsersStore } from '../stores/users'
 import { supabase, type User } from '../lib/supabase'
 
@@ -691,6 +691,7 @@ const selectedUser = ref<User | null>(null)
 const photoInput = ref<HTMLInputElement | null>(null)
 const photoFile = ref<File | null>(null)
 const photoPreview = ref<string>('')
+const photoRemoved = ref(false) // Track if user explicitly removed photo in edit mode
 
 const formData = ref({
   first_name: '',
@@ -707,8 +708,8 @@ const formData = ref({
   // Personal information
   date_of_birth: '',
   place_of_birth: '',
-  gender: '',
-  civil_status: '',
+  gender: '' as 'Male' | 'Female' | 'Other' | '',
+  civil_status: '' as 'Single' | 'Married' | 'Widowed' | 'Divorced' | 'Separated' | '',
   age: '',
   nationality: 'Filipino',
   password: '',
@@ -728,7 +729,7 @@ const resetForm = () => {
     suffix: '',
     full_name: '',
     email: '',
-    role: 'resident',
+    role: 'resident' as 'admin' | 'purok_chairman' | 'resident',
     purok: '',
     purok_chairman_id: '',
     phone_number: '',
@@ -736,8 +737,8 @@ const resetForm = () => {
     // Personal information
     date_of_birth: '',
     place_of_birth: '',
-    gender: '',
-    civil_status: '',
+    gender: '' as 'Male' | 'Female' | 'Other' | '',
+    civil_status: '' as 'Single' | 'Married' | 'Widowed' | 'Divorced' | 'Separated' | '',
     age: '',
     nationality: 'Filipino',
     password: '',
@@ -748,6 +749,7 @@ const resetForm = () => {
   formError.value = ''
   photoFile.value = null
   photoPreview.value = ''
+  photoRemoved.value = false
   if (photoInput.value) {
     photoInput.value.value = ''
   }
@@ -794,6 +796,7 @@ const handlePhotoSelect = (event: Event) => {
   }
 
   photoFile.value = file
+  photoRemoved.value = false // Reset removed flag when new photo is selected
 
   // Create preview
   const reader = new FileReader()
@@ -808,6 +811,7 @@ const handlePhotoSelect = (event: Event) => {
 const removePhoto = () => {
   photoFile.value = null
   photoPreview.value = ''
+  photoRemoved.value = true // Mark photo as explicitly removed
   if (photoInput.value) {
     photoInput.value.value = ''
   }
@@ -913,6 +917,11 @@ const editUser = (user: User) => {
     face_verified_at: user.face_verified_at || ''
   }
 
+  // Reset photo state
+  photoRemoved.value = false
+  photoPreview.value = ''
+  photoFile.value = null
+
   // Auto-calculate age if date_of_birth exists
   if (formData.value.date_of_birth) {
     autoCalculateAge()
@@ -998,10 +1007,10 @@ const handleSubmit = async () => {
         updateData.place_of_birth = null as any
       }
       if (updateData.gender === '') {
-        updateData.gender = null as any
+        updateData.gender = undefined as any
       }
       if (updateData.civil_status === '') {
-        updateData.civil_status = null as any
+        updateData.civil_status = undefined as any
       }
       if (updateData.nationality === '') {
         updateData.nationality = null as any
@@ -1066,10 +1075,10 @@ const handleSubmit = async () => {
         createData.place_of_birth = null as any
       }
       if (createData.gender === '') {
-        createData.gender = null as any
+        createData.gender = undefined as any
       }
       if (createData.civil_status === '') {
-        createData.civil_status = null as any
+        createData.civil_status = undefined as any
       }
       if (createData.nationality === '') {
         createData.nationality = null as any
@@ -1128,13 +1137,17 @@ const handleDeleteUser = async () => {
   formLoading.value = true
 
   try {
-    const { success } = await usersStore.removeUser(userToDelete.value.id)
+    const { success, error } = await usersStore.removeUser(userToDelete.value.id)
     if (success) {
+      alert(`User "${userToDelete.value.full_name}" deleted successfully!`)
       showDeleteModal.value = false
       userToDelete.value = null
+    } else {
+      alert(`Failed to delete user: ${error || 'Unknown error'}`)
     }
   } catch (error) {
     console.error('Error deleting user:', error)
+    alert(`Failed to delete user: ${error instanceof Error ? error.message : 'Unknown error'}`)
   } finally {
     formLoading.value = false
   }
@@ -1191,9 +1204,39 @@ const autoCalculateAge = () => {
   }
 }
 
+let usersSubscription: any = null
+
 onMounted(() => {
   // ✅ Data is already loaded by AdminLayout
   console.log('👥 Users page using cached data from layout')
+
+  // Set up real-time subscription for users
+  console.log('📡 Setting up real-time subscription for users...')
+  usersSubscription = supabase
+    .channel('users_changes')
+    .on(
+      'postgres_changes',
+      {
+        event: '*', // Listen to INSERT, UPDATE, DELETE
+        schema: 'public',
+        table: 'users'
+      },
+      (payload) => {
+        console.log('🔔 Users real-time update:', payload.eventType, payload)
+        // Refetch all users to update the list
+        usersStore.fetchUsers()
+      }
+    )
+    .subscribe((status) => {
+      console.log('📡 Users subscription status:', status)
+    })
+})
+
+onUnmounted(() => {
+  console.log('🔌 Unsubscribing from users changes')
+  if (usersSubscription) {
+    usersSubscription.unsubscribe()
+  }
 })
 </script>
 

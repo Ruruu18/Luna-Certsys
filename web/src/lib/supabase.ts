@@ -232,11 +232,51 @@ export const getAllUsers = async () => {
 };
 
 export const deleteUser = async (userId: string) => {
-  const { error } = await supabase
-    .from('users')
-    .delete()
-    .eq('id', userId);
-  return { error };
+  try {
+    console.log('🗑️ Starting user deletion for ID:', userId);
+
+    // Verify service role key is configured
+    if (!supabaseServiceKey) {
+      const errorMsg = 'Service role key not configured. Cannot delete users without admin privileges.';
+      console.error('❌', errorMsg);
+      return { error: { message: errorMsg } };
+    }
+
+    console.log('✅ Using service role key for admin deletion');
+
+    // First, delete the auth user using admin privileges
+    console.log('🗑️ Step 1: Deleting auth user...');
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+
+    if (authError) {
+      console.error('❌ Error deleting auth user:', authError);
+      console.log('⚠️  Continuing to try database deletion...');
+      // If auth deletion fails, still try to delete database record
+      // (user might not exist in auth but exist in database)
+    } else {
+      console.log('✅ Auth user deleted successfully');
+    }
+
+    // Then delete the database record using admin client (bypasses RLS)
+    console.log('🗑️ Step 2: Deleting database record...');
+    const { error: dbError, count } = await supabaseAdmin
+      .from('users')
+      .delete({ count: 'exact' })
+      .eq('id', userId);
+
+    if (dbError) {
+      console.error('❌ Error deleting database record:', dbError);
+      console.error('Full error details:', JSON.stringify(dbError, null, 2));
+      return { error: dbError };
+    }
+
+    console.log(`✅ User deleted successfully from both auth and database (${count} record(s) deleted)`);
+    return { error: null };
+  } catch (exception: any) {
+    console.error('❌ Exception during user deletion:', exception);
+    console.error('Exception details:', JSON.stringify(exception, null, 2));
+    return { error: exception };
+  }
 };
 
 export const getCertificates = async (userId?: string) => {

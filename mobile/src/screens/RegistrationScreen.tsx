@@ -119,9 +119,18 @@ export default function RegistrationScreen({ navigation }: RegistrationScreenPro
   // Generate purok options for Purok 1-33
   const purokOptions = ['', ...Array.from({ length: 33 }, (_, i) => `Purok ${i + 1}`)];
 
+  // Helper function to normalize purok for comparison (handles both "Purok 1" and "1" formats)
+  const normalizePurok = (purok: string) => {
+    if (!purok) return '';
+    // Extract just the number from formats like "Purok 1" or "1"
+    const match = purok.match(/\d+/);
+    return match ? match[0] : purok;
+  };
+
   // Get chairman name for selected purok
   const getChairmanForPurok = (purok: string) => {
-    const chairman = purokChairmen.find(c => c.purok === purok);
+    const normalizedPurok = normalizePurok(purok);
+    const chairman = purokChairmen.find(c => normalizePurok(c.purok) === normalizedPurok);
     return chairman ? chairman.full_name : null;
   };
 
@@ -280,8 +289,9 @@ export default function RegistrationScreen({ navigation }: RegistrationScreenPro
         return;
       }
 
-      // Find the chairman for the selected purok
-      const chairman = purokChairmen.find(c => c.purok === formData.purok);
+      // Find the chairman for the selected purok (normalize to handle both "Purok 1" and "1" formats)
+      const normalizedSelectedPurok = normalizePurok(formData.purok);
+      const chairman = purokChairmen.find(c => normalizePurok(c.purok) === normalizedSelectedPurok);
 
       if (!chairman) {
         Alert.alert('Error', 'No Purok Chairman found for the selected purok. Please contact the admin.');

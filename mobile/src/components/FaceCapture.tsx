@@ -10,6 +10,7 @@ import {
   Image,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { spacing, fontSize, moderateScale, verticalScale } from '../utils/responsive';
@@ -90,7 +91,15 @@ export default function FaceCapture({ onCapture, onCancel }: FaceCaptureProps) {
       });
 
       console.log('Photo captured:', photo.uri);
-      setCapturedUri(photo.uri);
+
+      // Flip the image horizontally to un-mirror the front camera
+      const flippedPhoto = await ImageManipulator.manipulateAsync(
+        photo.uri,
+        [{ flip: ImageManipulator.FlipType.Horizontal }],
+        { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      setCapturedUri(flippedPhoto.uri);
       setInstruction('Photo captured! Review below');
       setIsCapturing(false);
     } catch (error) {

@@ -315,9 +315,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useCertificateRequestsStore } from '../stores/certificateRequests'
 import { useUsersStore } from '../stores/users'
+import { supabase } from '../lib/supabase'
 import type { CertificateRequest, User } from '../lib/supabase'
 
 const requestsStore = useCertificateRequestsStore()
@@ -486,9 +487,39 @@ const formatStatus = (status: string) => {
     .join(' ')
 }
 
+let requestsSubscription: any = null
+
 onMounted(() => {
   // ✅ Data is already loaded by AdminLayout
   console.log('📋 Certificate requests page using cached data from layout')
+
+  // Set up real-time subscription for certificate requests
+  console.log('📡 Setting up real-time subscription for certificate requests...')
+  requestsSubscription = supabase
+    .channel('certificate_requests_changes')
+    .on(
+      'postgres_changes',
+      {
+        event: '*', // Listen to INSERT, UPDATE, DELETE
+        schema: 'public',
+        table: 'certificate_requests'
+      },
+      (payload) => {
+        console.log('🔔 Certificate requests real-time update:', payload.eventType, payload)
+        // Refetch all certificate requests to update the list
+        requestsStore.fetchRequests()
+      }
+    )
+    .subscribe((status) => {
+      console.log('📡 Certificate requests subscription status:', status)
+    })
+})
+
+onUnmounted(() => {
+  console.log('🔌 Unsubscribing from certificate requests changes')
+  if (requestsSubscription) {
+    requestsSubscription.unsubscribe()
+  }
 })
 </script>
 
