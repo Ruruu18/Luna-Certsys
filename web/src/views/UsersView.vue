@@ -1078,7 +1078,13 @@ const handleSubmit = async () => {
 
       // Parse full_name into first_name, middle_name, last_name
       if (updateData.full_name) {
-        const nameParts = updateData.full_name.trim().split(' ')
+        const nameParts = updateData.full_name.trim().split(' ').filter(part => part.length > 0)
+
+        // Clear existing name fields first to avoid duplication
+        updateData.first_name = ''
+        updateData.middle_name = null as any
+        updateData.last_name = ''
+
         if (nameParts.length === 1) {
           updateData.first_name = nameParts[0]
           updateData.last_name = nameParts[0]
