@@ -17,6 +17,7 @@ import { theme } from '../styles/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { createCertificateRequest } from '../lib/supabase';
 import { dimensions, spacing, fontSize, borderRadius, scale, verticalScale, moderateScale } from '../utils/responsive';
+import { createNotification } from '../services/notificationService';
 
 interface RequestCertificateScreenProps {
   navigation: import('../types/navigation').AppNavigationProp;
@@ -122,6 +123,28 @@ export default function RequestCertificateScreen({ navigation }: RequestCertific
         Alert.alert('Error', 'Failed to submit certificate request. Please try again.');
         console.error('Certificate request error:', error);
         return;
+      }
+
+      // Create notification for the purok chairman
+      if (user.purok_chairman_id) {
+        try {
+          await createNotification(
+            user.purok_chairman_id, // Send to chairman
+            'New Certificate Request',
+            `${user.first_name} ${user.last_name} has requested a ${formData.certificateType}.`,
+            'new_certificate_request',
+            data?.id,
+            {
+              resident_name: `${user.first_name} ${user.last_name}`,
+              certificate_type: formData.certificateType,
+              amount: calculateTotalFee(),
+            }
+          );
+          console.log('✅ Notification sent to chairman for certificate request');
+        } catch (notifError) {
+          console.error('Failed to create notification:', notifError);
+          // Don't block request if notification fails
+        }
       }
 
       // Navigate to payment screen

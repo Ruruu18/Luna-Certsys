@@ -9,7 +9,7 @@ export interface Notification {
   user_id: string;
   title: string;
   message: string;
-  type: 'certificate_status' | 'payment' | 'system' | 'approval' | 'rejection' | 'reminder';
+  type: 'certificate_status' | 'payment' | 'system' | 'approval' | 'rejection' | 'reminder' | 'new_registration' | 'new_certificate_request';
   related_certificate_id?: string;
   is_read: boolean;
   metadata?: {
@@ -19,6 +19,9 @@ export interface Notification {
     payment_amount?: number;
     payment_method?: string;
     payment_reference?: string;
+    resident_name?: string;
+    resident_id?: string;
+    purok?: string;
     [key: string]: any;
   };
   created_at: string;
@@ -325,6 +328,10 @@ export function getNotificationIcon(type: Notification['type']): string {
       return 'time';
     case 'system':
       return 'information-circle';
+    case 'new_registration':
+      return 'person-add';
+    case 'new_certificate_request':
+      return 'document';
     default:
       return 'notifications';
   }
@@ -347,6 +354,10 @@ export function getNotificationColor(type: Notification['type']): string {
       return '#8b5cf6'; // purple
     case 'system':
       return '#6366f1'; // indigo
+    case 'new_registration':
+      return '#10b981'; // green
+    case 'new_certificate_request':
+      return '#f59e0b'; // orange
     default:
       return '#64748b'; // gray
   }

@@ -24,6 +24,7 @@ import { dimensions, spacing, fontSize, borderRadius, scale, verticalScale, mode
 import { supabase } from '../lib/supabase';
 import SimpleFaceCapture from '../components/SimpleFaceCapture';
 import { uploadFacePhoto } from '../services/faceVerification';
+import { createNotification } from '../services/notificationService';
 
 interface RegistrationScreenProps {
   navigation: import('../types/navigation').AppNavigationProp;
@@ -370,6 +371,26 @@ export default function RegistrationScreen({ navigation }: RegistrationScreenPro
         }
         setIsSubmitting(false);
         return;
+      }
+
+      // Create notification for the purok chairman
+      try {
+        await createNotification(
+          chairman.id, // Send to chairman
+          'New Registration Request',
+          `${formData.firstName} ${formData.lastName} from ${formData.purok} has submitted a registration request.`,
+          'new_registration',
+          undefined,
+          {
+            resident_name: `${formData.firstName} ${formData.lastName}`,
+            purok: formData.purok,
+            email: formData.email,
+          }
+        );
+        console.log('✅ Notification sent to chairman');
+      } catch (notifError) {
+        console.error('Failed to create notification:', notifError);
+        // Don't block registration if notification fails
       }
 
       Alert.alert(
