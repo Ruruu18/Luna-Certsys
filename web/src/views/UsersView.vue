@@ -1100,6 +1100,10 @@ const handleSubmit = async () => {
       }
 
       console.log('✅ User updated successfully')
+
+      // Refresh the users list to get updated data from database
+      await usersStore.fetchUsers()
+
       alert('User updated successfully!')
 
       // Close modal and reset form
