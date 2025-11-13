@@ -97,11 +97,7 @@ export default function RegistrationScreen({ navigation }: RegistrationScreenPro
       setLoadingChairmen(true);
 
       const { data, error } = await supabase
-        .from('users')
-        .select('id, full_name, purok')
-        .eq('role', 'purok_chairman')
-        .not('purok', 'is', null)
-        .order('purok', { ascending: true });
+        .rpc('get_public_purok_chairmen');
 
       if (error) throw error;
 
@@ -806,8 +802,8 @@ export default function RegistrationScreen({ navigation }: RegistrationScreenPro
             ) : purokChairmen.length === 0 ? (
               <View style={styles.noChairmenContainer}>
                 <Ionicons name="alert-circle-outline" size={moderateScale(32)} color={theme.colors.warning} />
-                <Text style={styles.noChairmenText}>No Purok Chairmen available</Text>
-                <Text style={styles.noChairmenSubtext}>Please contact the admin to set up purok chairmen</Text>
+                <Text style={styles.noChairmenText}>No Purok Chairman available</Text>
+                <Text style={styles.noChairmenSubtext}>Please contact the admin to set up a purok chairman</Text>
               </View>
             ) : (
               <>
