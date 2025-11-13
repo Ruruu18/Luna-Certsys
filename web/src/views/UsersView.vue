@@ -1076,6 +1076,22 @@ const handleSubmit = async () => {
         }
       }
 
+      // Parse full_name into first_name, middle_name, last_name
+      if (updateData.full_name) {
+        const nameParts = updateData.full_name.trim().split(' ')
+        if (nameParts.length === 1) {
+          updateData.first_name = nameParts[0]
+          updateData.last_name = nameParts[0]
+        } else if (nameParts.length === 2) {
+          updateData.first_name = nameParts[0]
+          updateData.last_name = nameParts[1]
+        } else if (nameParts.length >= 3) {
+          updateData.first_name = nameParts[0]
+          updateData.last_name = nameParts[nameParts.length - 1]
+          updateData.middle_name = nameParts.slice(1, nameParts.length - 1).join(' ')
+        }
+      }
+
       const { success, error } = await usersStore.updateUser(editingUser.value.id, updateData as any)
       if (!success) {
         formError.value = error || 'Failed to update user'
@@ -1085,6 +1101,11 @@ const handleSubmit = async () => {
 
       console.log('✅ User updated successfully')
       alert('User updated successfully!')
+
+      // Close modal and reset form
+      showEditModal.value = false
+      editingUser.value = null
+      resetForm()
     } else {
       // Convert age to number before creating user
       const createData = { ...formData.value }
