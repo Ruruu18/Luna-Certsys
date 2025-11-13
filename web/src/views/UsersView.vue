@@ -176,16 +176,56 @@
               {{ formError }}
             </div>
 
-            <div class="form-group">
-              <label for="full_name" class="form-label">Full Name</label>
-              <input
-                id="full_name"
-                v-model="formData.full_name"
-                type="text"
-                class="form-input"
-                required
-                :disabled="formLoading"
-              />
+            <div class="form-row">
+              <div class="form-group">
+                <label for="first_name" class="form-label">First Name <span class="text-danger">*</span></label>
+                <input
+                  id="first_name"
+                  v-model="formData.first_name"
+                  type="text"
+                  class="form-input"
+                  required
+                  :disabled="formLoading"
+                  placeholder="First name"
+                />
+              </div>
+              <div class="form-group">
+                <label for="middle_name" class="form-label">Middle Name</label>
+                <input
+                  id="middle_name"
+                  v-model="formData.middle_name"
+                  type="text"
+                  class="form-input"
+                  :disabled="formLoading"
+                  placeholder="Middle name (optional)"
+                />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="last_name" class="form-label">Last Name <span class="text-danger">*</span></label>
+                <input
+                  id="last_name"
+                  v-model="formData.last_name"
+                  type="text"
+                  class="form-input"
+                  required
+                  :disabled="formLoading"
+                  placeholder="Last name"
+                />
+              </div>
+              <div class="form-group">
+                <label for="suffix" class="form-label">Suffix</label>
+                <input
+                  id="suffix"
+                  v-model="formData.suffix"
+                  type="text"
+                  class="form-input"
+                  :disabled="formLoading"
+                  placeholder="Jr., Sr., III (optional)"
+                />
+              </div>
             </div>
 
             <div class="form-group">
@@ -977,8 +1017,13 @@ const handleSubmit = async () => {
 
   try {
     // Basic validation
-    if (!formData.value.full_name.trim()) {
-      formError.value = 'Full name is required'
+    if (!formData.value.first_name.trim()) {
+      formError.value = 'First name is required'
+      return
+    }
+
+    if (!formData.value.last_name.trim()) {
+      formError.value = 'Last name is required'
       return
     }
 
@@ -1076,27 +1121,8 @@ const handleSubmit = async () => {
         }
       }
 
-      // Parse full_name into first_name, middle_name, last_name
-      if (updateData.full_name) {
-        const nameParts = updateData.full_name.trim().split(' ').filter(part => part.length > 0)
-
-        // Clear existing name fields first to avoid duplication
-        updateData.first_name = ''
-        updateData.middle_name = null as any
-        updateData.last_name = ''
-
-        if (nameParts.length === 1) {
-          updateData.first_name = nameParts[0]
-          updateData.last_name = nameParts[0]
-        } else if (nameParts.length === 2) {
-          updateData.first_name = nameParts[0]
-          updateData.last_name = nameParts[1]
-        } else if (nameParts.length >= 3) {
-          updateData.first_name = nameParts[0]
-          updateData.last_name = nameParts[nameParts.length - 1]
-          updateData.middle_name = nameParts.slice(1, nameParts.length - 1).join(' ')
-        }
-      }
+      // Remove full_name from update data (it's computed from first/middle/last)
+      delete (updateData as any).full_name
 
       const { success, error } = await usersStore.updateUser(editingUser.value.id, updateData as any)
       if (!success) {
