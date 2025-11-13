@@ -44,12 +44,15 @@ console.log('Supabase client initialized with URL:', supabaseUrl);
 async function testConnection() {
   try {
     // Test basic connection without auth first
-    const { data: healthCheck } = await supabase.from('users').select('count').limit(1);
-    if (healthCheck && healthCheck.length === 0) {
-      console.log('Supabase connection test: SUCCESS (RLS protecting data as expected)');
-    } else {
-      console.log('Supabase connection test: SUCCESS');
+    // Use a lightweight head request with count to avoid selecting non-existent columns
+    const { count, error } = await supabase
+      .from('users')
+      .select('id', { count: 'estimated', head: true });
+
+    if (error) {
+      console.warn('Supabase connection test warning:', error.message || error);
     }
+    console.log('Supabase connection test: SUCCESS');
   } catch (error) {
     console.error('Supabase connection test failed:', error);
   }

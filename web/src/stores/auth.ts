@@ -61,34 +61,78 @@ export const useAuthStore = defineStore('auth', () => {
       if (!authUser?.email) {
         console.error('No auth user email found')
         user.value = null
-        return
+        return { userProfile: null, error: new Error('No auth user email found') }
       }
 
-      // Try database lookup for all users
+      // Try database lookup for current user by id (RLS-friendly)
       try {
         const { data: userProfile, error } = await supabase
           .from('users')
           .select('*')
-          .eq('email', authUser.email)
+          .eq('id', userId)
           .single()
 
         console.log('Database profile query result:', { userProfile, error })
 
         if (error) {
-          console.error('Profile lookup failed:', error)
-          user.value = null
+          // If no profile row exists, attempt to create a minimal one
+          if (error.code === 'PGRST116' || error.message?.toLowerCase()?.includes('row') || error.details?.toLowerCase()?.includes('0 rows')) {
+            console.warn('No profile found, attempting to create a minimal profile...')
+
+            const fullName = (authUser?.user_metadata as any)?.full_name
+              || [
+                   (authUser?.user_metadata as any)?.first_name,
+                   (authUser?.user_metadata as any)?.last_name
+                 ].filter(Boolean).join(' ')
+              || (authUser?.email?.split('@')[0] || 'User')
+
+            const role = (authUser?.user_metadata as any)?.role || 'resident'
+
+            const { data: created, error: insertError } = await supabase
+              .from('users')
+              .insert({
+                id: userId,
+                email: authUser.email,
+                full_name: fullName,
+                first_name: (authUser?.user_metadata as any)?.first_name || null,
+                last_name: (authUser?.user_metadata as any)?.last_name || null,
+                role,
+                face_verified: false,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              } as any)
+              .select('*')
+              .single()
+
+            if (insertError) {
+              console.error('Failed to auto-create profile:', insertError)
+              user.value = null
+              return { userProfile: null, error: insertError }
+            } else {
+              console.log('Minimal profile created successfully')
+              user.value = created as any
+              return { userProfile: created as any, error: null }
+            }
+          } else {
+            console.error('Profile lookup failed:', error)
+            user.value = null
+            return { userProfile: null, error }
+          }
         } else {
           user.value = userProfile
           console.log('Successfully loaded profile from database')
+          return { userProfile, error: null }
         }
       } catch (error) {
         console.error('Exception loading profile:', error)
         user.value = null
+        return { userProfile: null, error }
       }
 
     } catch (error) {
       console.error('Exception in loadUserProfile:', error)
       user.value = null
+      return { userProfile: null, error }
     }
   }
 

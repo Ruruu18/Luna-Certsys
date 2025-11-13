@@ -89,8 +89,12 @@ const handleLogin = async () => {
     } else if (data?.user) {
       console.log('Login successful, waiting for profile to load...')
 
-      // Wait for user profile to load (simplified approach)
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      // Wait for user profile to load with a short polling loop (max ~5s)
+      let attempts = 0
+      while (attempts < 10 && !authStore.user) {
+        await new Promise(resolve => setTimeout(resolve, 500))
+        attempts++
+      }
 
       console.log('Auth store state after login:', {
         user: authStore.user,
