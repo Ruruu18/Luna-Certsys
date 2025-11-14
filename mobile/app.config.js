@@ -6,7 +6,7 @@ export default {
     orientation: "portrait",
     icon: "./assets/images/logo.png",
     userInterfaceStyle: "automatic",
-    newArchEnabled: true,
+    newArchEnabled: false,
     scheme: "lunacertsys",
     assetBundlePatterns: ["**/*"],
     splash: {
@@ -23,6 +23,11 @@ export default {
       adaptiveIcon: {
         foregroundImage: "./assets/images/logo.png",
         backgroundColor: "#ffffff"
+      },
+      splash: {
+        image: "./assets/images/splash-logo.png",
+        resizeMode: "contain",
+        backgroundColor: "#00BFFF"
       },
       package: "com.ruru18.mobile",
       versionCode: 1,
@@ -46,6 +51,7 @@ export default {
       favicon: "./assets/favicon.png"
     },
     plugins: [
+      "expo-splash-screen",
       [
         "expo-notifications",
         {
