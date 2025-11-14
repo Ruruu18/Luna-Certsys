@@ -8,6 +8,8 @@ import {
   Dimensions,
   Alert,
   Image,
+  Platform,
+  StatusBar,
 } from 'react-native';
 import { CameraCapturedPicture, CameraView, useCameraPermissions } from 'expo-camera';
 import * as FaceDetector from 'expo-face-detector';
@@ -32,6 +34,7 @@ interface DetectedFace {
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0;
 
 export default function FaceCaptureCamera({ onCapture, onCancel }: FaceCaptureProps) {
   const [permission, requestPermission] = useCameraPermissions();
@@ -299,10 +302,12 @@ export default function FaceCaptureCamera({ onCapture, onCancel }: FaceCapturePr
 
   return (
     <View style={styles.container}>
+      <StatusBar hidden />
       <CameraView
         ref={cameraRef}
         style={styles.camera}
         facing="front"
+        mirror={true}
         // @ts-ignore - Face detection props might not be available in newer versions
         onFacesDetected={handleFacesDetected}
         faceDetectorSettings={{
@@ -368,6 +373,8 @@ const styles = StyleSheet.create({
   },
   camera: {
     flex: 1,
+    width: '100%',
+    height: '100%',
   },
   permissionContainer: {
     flex: 1,
@@ -420,7 +427,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingTop: 60,
+    paddingTop: Platform.OS === 'android' ? 20 : 60,
     paddingBottom: 16,
     paddingHorizontal: 20,
     flexDirection: 'row',
@@ -444,7 +451,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingBottom: 40,
+    paddingBottom: Platform.OS === 'android' ? 20 : 40,
     paddingTop: 20,
     paddingHorizontal: 20,
     flexDirection: 'row',
