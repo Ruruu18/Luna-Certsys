@@ -274,7 +274,11 @@ export default function FaceCaptureCamera({ onCapture, onCancel }: FaceCapturePr
       <View style={styles.container}>
         <View style={styles.previewContainer}>
           <Text style={styles.previewTitle}>Review Your Photo</Text>
-          <Image source={{ uri: capturedPhoto }} style={styles.previewImage} />
+          <Image
+            source={{ uri: capturedPhoto }}
+            style={styles.previewImage}
+            resizeMode="cover"
+          />
           <Text style={styles.previewText}>Is this photo acceptable?</Text>
 
           <View style={styles.previewActions}>
@@ -484,6 +488,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     padding: 20,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   previewTitle: {
     fontSize: 24,
@@ -491,12 +496,12 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     textAlign: 'center',
     marginBottom: 20,
+    width: '100%',
   },
   previewImage: {
     width: SCREEN_WIDTH - 40,
     height: SCREEN_WIDTH - 40,
     borderRadius: 20,
-    alignSelf: 'center',
     marginBottom: 20,
   },
   previewText: {
@@ -504,10 +509,12 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     textAlign: 'center',
     marginBottom: 32,
+    width: '100%',
   },
   previewActions: {
     flexDirection: 'row',
     gap: 12,
+    width: '100%',
   },
   retryButton: {
     flex: 1,
