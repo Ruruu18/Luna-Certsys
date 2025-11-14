@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
   Modal,
   ScrollView,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import StatusBarWrapper from '../components/StatusBarWrapper';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,7 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, supabaseAdmin } from '../lib/supabase';
-import { dimensions, spacing, fontSize, borderRadius, scale, verticalScale, moderateScale } from '../utils/responsive';
+import { spacing, fontSize, borderRadius, verticalScale, moderateScale } from '../utils/responsive';
 import { sendPasswordEmail } from '../services/emailService';
 
 interface PendingRegistrationsScreenProps {
@@ -60,6 +62,14 @@ export default function PendingRegistrationsScreen({ navigation }: PendingRegist
   const [rejectionModalVisible, setRejectionModalVisible] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [approvalModalVisible, setApprovalModalVisible] = useState(false);
+  const [approvalInfo, setApprovalInfo] = useState<{ name: string; email: string; tempPassword: string; emailSent?: boolean } | null>(null);
+
+  const handleCloseApprovalModal = () => {
+    setApprovalModalVisible(false);
+    setApprovalInfo(null);
+    fetchPendingRegistrations();
+  };
 
   useEffect(() => {
     if (user?.role === 'purok_chairman') {
@@ -276,32 +286,35 @@ export default function PendingRegistrationsScreen({ navigation }: PendingRegist
 
       console.log('✅ Registration approved successfully!');
 
-      // Send password via email
-      console.log('📧 Sending password email...');
+      // Send email with password
+      console.log('📧 Sending welcome email with password to resident...');
+      console.log('   Recipient:', registration.email);
+      console.log('   Password being sent:', tempPassword);
+
       const emailResult = await sendPasswordEmail({
         recipientEmail: registration.email,
-        recipientName: `${registration.first_name} ${registration.last_name}`,
+        recipientName: full_name || `${registration.first_name} ${registration.last_name}`.trim(),
         password: tempPassword,
-        purokChairmanName: user?.full_name || 'Your Purok Chairman',
+        purokChairmanName: user.full_name || `${user.first_name} ${user.last_name}`.trim(),
       });
 
-      console.log('📧 Email result:', emailResult);
-
-      // Show success alert
       if (emailResult.success) {
-        Alert.alert(
-          'Registration Approved ✓',
-          `${registration.first_name} ${registration.last_name}'s registration has been approved!\n\n✉️ An email has been sent to ${registration.email} with their login credentials.\n\nTemporary Password: ${tempPassword}\n\n(Password also saved in case email delivery fails)`,
-          [{ text: 'OK', onPress: () => fetchPendingRegistrations() }]
-        );
+        console.log('✅ Welcome email sent successfully to', registration.email);
+        console.log('   The resident can now login with:');
+        console.log('   Email:', registration.email);
+        console.log('   Password:', tempPassword);
       } else {
-        // Email failed, show password to chairman as fallback
-        Alert.alert(
-          'Registration Approved (Email Failed)',
-          `${registration.first_name} ${registration.last_name}'s registration has been approved!\n\n⚠️ Email delivery failed: ${emailResult.error}\n\nTemporary Password: ${tempPassword}\n\nPlease manually share this password with the resident.`,
-          [{ text: 'OK', onPress: () => fetchPendingRegistrations() }]
-        );
+        console.warn('⚠️ Email sending failed:', emailResult.error);
+        console.warn('   You will need to manually share the password with the resident');
       }
+
+      setApprovalInfo({
+        name: full_name || `${registration.first_name} ${registration.last_name}`.trim(),
+        email: registration.email,
+        tempPassword,
+        emailSent: emailResult.success,
+      });
+      setApprovalModalVisible(true);
     } catch (error: any) {
       console.error('❌❌❌ ERROR APPROVING REGISTRATION ❌❌❌');
       console.error('Error:', error);
@@ -631,7 +644,10 @@ export default function PendingRegistrationsScreen({ navigation }: PendingRegist
       transparent={true}
       onRequestClose={() => setRejectionModalVisible(false)}
     >
-      <View style={styles.rejectionModalOverlay}>
+      <KeyboardAvoidingView
+        style={styles.rejectionModalOverlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
         <View style={styles.rejectionModalContent}>
           <View style={styles.rejectionModalHeader}>
             <Ionicons name="alert-circle" size={moderateScale(48)} color={theme.colors.error} />
@@ -671,9 +687,70 @@ export default function PendingRegistrationsScreen({ navigation }: PendingRegist
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
+
+  const renderApprovalModal = () => {
+    if (!approvalInfo) return null;
+
+    return (
+      <Modal
+        visible={approvalModalVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={handleCloseApprovalModal}
+      >
+        <View style={styles.approvalModalOverlay}>
+          <View style={styles.approvalModalCard}>
+            <View style={styles.approvalModalIconContainer}>
+              <Ionicons name="checkmark-circle" size={moderateScale(56)} color={theme.colors.success} />
+            </View>
+            <Text style={styles.approvalModalTitle}>
+              {approvalInfo.emailSent ? 'Registration Approved!' : 'Registration Approved'}
+            </Text>
+            <Text style={styles.approvalModalSubtitle}>
+              {approvalInfo.emailSent
+                ? 'An email with login credentials has been sent to the resident.'
+                : 'Email delivery failed. Please share the credentials manually.'}
+            </Text>
+
+            <View style={styles.approvalInfoCard}>
+              <View style={styles.approvalInfoRow}>
+                <Text style={styles.approvalInfoLabel}>Resident:</Text>
+                <Text style={styles.approvalInfoValue}>{approvalInfo.name}</Text>
+              </View>
+              <View style={styles.approvalInfoRow}>
+                <Text style={styles.approvalInfoLabel}>Email:</Text>
+                <Text style={styles.approvalInfoValue}>{approvalInfo.email}</Text>
+              </View>
+              <View style={styles.approvalPasswordSection}>
+                <Text style={styles.approvalInfoLabel}>Temporary Password</Text>
+                <Text style={styles.approvalPassword}>{approvalInfo.tempPassword}</Text>
+              </View>
+            </View>
+
+            <View style={styles.approvalWarningBox}>
+              <Ionicons
+                name={approvalInfo.emailSent ? "checkmark-circle-outline" : "warning-outline"}
+                size={moderateScale(20)}
+                color={approvalInfo.emailSent ? theme.colors.success : theme.colors.warning}
+              />
+              <Text style={styles.approvalWarningText}>
+                {approvalInfo.emailSent
+                  ? 'The resident should receive the email shortly. You can also share this password with them directly if needed.'
+                  : 'Please manually share this temporary password with the resident so they can log in to their account.'}
+              </Text>
+            </View>
+
+            <TouchableOpacity style={styles.approvalModalButton} onPress={handleCloseApprovalModal}>
+              <Text style={styles.approvalModalButtonText}>Got it</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
 
   if (user?.role !== 'purok_chairman') {
     return (
@@ -742,6 +819,7 @@ export default function PendingRegistrationsScreen({ navigation }: PendingRegist
 
       {renderDetailsModal()}
       {renderRejectionModal()}
+      {renderApprovalModal()}
     </SafeAreaView>
   );
 }
@@ -1146,6 +1224,113 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
   },
   rejectionModalConfirmText: {
+    fontSize: fontSize.md,
+    fontWeight: theme.fontWeight.semibold,
+    fontFamily: theme.fontFamily.semiBold,
+    color: 'white',
+  },
+  // Approval Modal Styles
+  approvalModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+  },
+  approvalModalCard: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    width: '100%',
+    maxWidth: 450,
+  },
+  approvalModalIconContainer: {
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  approvalModalTitle: {
+    fontSize: fontSize.xl,
+    fontWeight: theme.fontWeight.bold,
+    fontFamily: theme.fontFamily.bold,
+    color: theme.colors.text,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  approvalModalSubtitle: {
+    fontSize: fontSize.md,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+  },
+  approvalInfoCard: {
+    backgroundColor: theme.colors.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  approvalInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  approvalInfoLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    fontFamily: theme.fontFamily.medium,
+    color: theme.colors.textSecondary,
+  },
+  approvalInfoValue: {
+    fontSize: fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.text,
+    flex: 1,
+    textAlign: 'right',
+  },
+  approvalPasswordSection: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  approvalPassword: {
+    fontSize: fontSize.lg,
+    fontWeight: theme.fontWeight.bold,
+    fontFamily: 'Courier',
+    color: theme.colors.primary,
+    textAlign: 'center',
+    backgroundColor: theme.colors.primary + '10',
+    padding: spacing.md,
+    borderRadius: borderRadius.sm,
+    marginTop: spacing.sm,
+    letterSpacing: 2,
+  },
+  approvalWarningBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: theme.colors.warning + '10',
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.warning,
+    padding: spacing.md,
+    borderRadius: borderRadius.sm,
+    marginBottom: spacing.lg,
+    gap: spacing.sm,
+  },
+  approvalWarningText: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.text,
+    lineHeight: verticalScale(18),
+  },
+  approvalModalButton: {
+    backgroundColor: theme.colors.primary,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+  },
+  approvalModalButtonText: {
     fontSize: fontSize.md,
     fontWeight: theme.fontWeight.semibold,
     fontFamily: theme.fontFamily.semiBold,

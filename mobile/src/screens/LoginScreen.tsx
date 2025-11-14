@@ -10,6 +10,8 @@ import {
   Platform,
   ActivityIndicator,
   ImageBackground,
+  KeyboardAvoidingView,
+  ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -92,7 +94,17 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
         >
-          <View style={styles.contentContainer}>
+          <KeyboardAvoidingView
+            style={styles.keyboardAvoidingView}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={0}
+          >
+            <ScrollView
+              contentContainerStyle={styles.scrollViewContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.contentContainer}>
             {/* Logo Section */}
             <View style={styles.logoContainer}>
               <Image
@@ -140,7 +152,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                     onPress={() => setShowPassword(!showPassword)}
                   >
                     <Ionicons
-                      name={showPassword ? 'eye-off' : 'eye'}
+                      name={showPassword ? 'eye' : 'eye-off'}
                       size={24}
                       color="#666666"
                     />
@@ -178,6 +190,8 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
               </View>
             </View>
           </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
         </LinearGradient>
       </ImageBackground>
 
@@ -200,6 +214,12 @@ const styles = StyleSheet.create({
   },
   overlay: {
     flex: 1,
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  scrollViewContent: {
+    flexGrow: 1,
   },
   contentContainer: {
     flex: 1,
