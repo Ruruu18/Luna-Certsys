@@ -55,11 +55,6 @@ export default {
       ],
       "expo-asset",
       "expo-font"
-    ],
-    extra: {
-      eas: {
-        projectId: "4a7ed167-2bea-444b-b8e4-279d3ab142b0"
-      }
-    }
+    ]
   }
 };
