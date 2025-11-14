@@ -8,6 +8,7 @@ export default {
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
     scheme: "lunacertsys",
+    assetBundlePatterns: ["**/*"],
     splash: {
       image: "./assets/images/splash-logo.png",
       resizeMode: "contain",
