@@ -702,7 +702,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
             />
           </TouchableOpacity>
           <Text style={styles.welcomeBodyText}>Welcome back,</Text>
-          <Text style={styles.userNameBody}>
+          <Text style={styles.userNameBody} numberOfLines={2} adjustsFontSizeToFit>
             {loading ? 'Loading...' : (user?.full_name || 'User')}
           </Text>
           {user?.role === 'purok_chairman' && (
@@ -1121,6 +1121,9 @@ const styles = StyleSheet.create({
     fontWeight: theme.fontWeight.bold,
     fontFamily: theme.fontFamily.bold,
     marginTop: spacing.xs,
+    textAlign: 'center',
+    lineHeight: fontSize.xl * 1.3,
+    paddingHorizontal: spacing.md,
   },
   roleBodyText: {
     fontSize: fontSize.sm,

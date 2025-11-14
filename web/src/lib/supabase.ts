@@ -28,6 +28,11 @@ export const supabase = (() => {
         detectSessionInUrl: false,
         storage: typeof window !== 'undefined' ? window.localStorage : undefined,
         storageKey: 'resare-web-auth' // Unique storage key for this app
+      },
+      realtime: {
+        params: {
+          eventsPerSecond: 10
+        }
       }
     });
   }
@@ -36,6 +41,31 @@ export const supabase = (() => {
 
 // Export supabaseAdmin as alias to the same client for backward compatibility
 export const supabaseAdmin = supabase;
+
+// Auto-clear invalid sessions to prevent "Refresh Token Not Found" errors
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'TOKEN_REFRESHED') {
+    console.log('✅ Auth token refreshed successfully');
+  } else if (event === 'SIGNED_OUT') {
+    console.log('🚪 User signed out');
+  } else if (event === 'SIGNED_IN') {
+    console.log('✅ User signed in');
+  }
+});
+
+// Detect and clear invalid sessions on startup
+(async () => {
+  try {
+    const { error } = await supabase.auth.getSession();
+    if (error) {
+      console.warn('⚠️  Invalid session detected, clearing...', error.message);
+      await supabase.auth.signOut();
+      localStorage.removeItem('resare-web-auth');
+    }
+  } catch (err) {
+    console.error('Error checking session:', err);
+  }
+})();
 
 // Test connection on startup
 console.log('Supabase client initialized with URL:', supabaseUrl);
@@ -408,7 +438,7 @@ export const createUser = async (userData: Omit<User, 'id' | 'created_at' | 'upd
         message: authError.message,
         status: authError.status
       });
-      
+
       // Return a more user-friendly error message
       let friendlyMessage = authError.message;
       if (authError.message?.includes('already registered')) {
@@ -418,7 +448,7 @@ export const createUser = async (userData: Omit<User, 'id' | 'created_at' | 'upd
       } else if (authError.message?.includes('weak password')) {
         friendlyMessage = 'Password is too weak. Please use a stronger password';
       }
-      
+
       return { data: null, error: { ...authError, message: friendlyMessage }, password: null };
     }
 

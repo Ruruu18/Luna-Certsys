@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../styles/theme';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseAdmin } from '../lib/supabase';
 import { dimensions, spacing, fontSize, borderRadius, scale, verticalScale, moderateScale } from '../utils/responsive';
 import { sendPasswordEmail } from '../services/emailService';
 
@@ -36,12 +36,14 @@ interface PendingRegistration {
   gender: string;
   civil_status: string;
   age: number;
+  nationality: string;
   purok: string;
   house_number: string;
   street: string;
   address: string;
   phone_number: string;
   email: string;
+  photo_url?: string;
   status: 'pending' | 'approved' | 'rejected';
   rejection_reason?: string;
   created_at: string;
@@ -186,30 +188,93 @@ export default function PendingRegistrationsScreen({ navigation }: PendingRegist
       console.log('Chairman ID:', user.id);
       console.log('Temporary password:', tempPassword);
 
-      // Use database function to create user (no auth state changes!)
-      console.log('📞 Calling approve_resident_registration function...');
-      const { data: functionResult, error: functionError } = await supabase.rpc(
-        'approve_resident_registration',
-        {
-          p_registration_id: registration.id,
-          p_temp_password: tempPassword,
-          p_chairman_id: user.id,
-        }
-      );
-
-      console.log('Function result:', functionResult);
-
-      if (functionError) {
-        console.error('❌ Function error:', functionError);
-        throw new Error(functionError.message || 'Failed to approve registration');
+      // Check if admin client is available
+      if (!supabaseAdmin) {
+        throw new Error('Service role key not configured. Please add EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY to your .env file.');
       }
 
-      if (!functionResult?.success) {
-        throw new Error(functionResult?.error || 'Approval failed');
+      // Create auth user with admin client
+      console.log('👤 Creating auth user with admin privileges...');
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email: registration.email,
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: {
+          first_name: registration.first_name,
+          last_name: registration.last_name,
+          role: 'resident',
+        },
+      });
+
+      if (authError || !authData.user) {
+        throw new Error(authError?.message || 'Failed to create auth user');
       }
 
-      console.log('✅ User created successfully via database function!');
-      console.log('New user ID:', functionResult.user_id);
+      console.log('✅ Auth user created:', authData.user.id);
+
+      // Build full name
+      const fullNameParts = [
+        registration.first_name,
+        registration.middle_name,
+        registration.last_name,
+        registration.suffix,
+      ].filter(Boolean);
+      const full_name = fullNameParts.join(' ');
+
+      // Create user profile
+      console.log('📝 Creating user profile...');
+      const { error: insertError } = await supabaseAdmin
+        .from('users')
+        .insert({
+          id: authData.user.id,
+          email: registration.email,
+          first_name: registration.first_name,
+          middle_name: registration.middle_name || null,
+          last_name: registration.last_name,
+          suffix: registration.suffix || null,
+          full_name,
+          date_of_birth: registration.date_of_birth,
+          place_of_birth: registration.place_of_birth,
+          gender: registration.gender,
+          civil_status: registration.civil_status,
+          age: registration.age,
+          nationality: registration.nationality,
+          house_number: registration.house_number,
+          street: registration.street,
+          address: registration.address,
+          phone_number: registration.phone_number,
+          role: 'resident',
+          purok: registration.purok,
+          purok_chairman_id: user.id,
+          photo_url: registration.photo_url || null,
+          face_verified: !!registration.photo_url, // True if they uploaded a photo during registration
+          face_verified_at: registration.photo_url ? new Date().toISOString() : null,
+        });
+
+      if (insertError) {
+        console.error('Profile creation failed, cleaning up...');
+        await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+        throw new Error(insertError.message);
+      }
+
+      console.log('✅ User profile created');
+
+      // Update registration status
+      console.log('🔄 Updating registration status...');
+      const { error: updateError } = await supabaseAdmin
+        .from('pending_registrations')
+        .update({
+          status: 'approved',
+          reviewed_at: new Date().toISOString(),
+          reviewed_by: user.id,
+        })
+        .eq('id', registration.id);
+
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
+
+      console.log('✅ Registration approved successfully!');
 
       // Send password via email
       console.log('📧 Sending password email...');

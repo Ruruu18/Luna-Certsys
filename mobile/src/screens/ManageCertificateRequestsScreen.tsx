@@ -22,6 +22,7 @@ import { supabase, CertificateRequest, User } from '../lib/supabase';
 import { dimensions, spacing, fontSize, borderRadius, scale, verticalScale, moderateScale } from '../utils/responsive';
 import { generateCertificatePDF } from '../services/certificateGenerator';
 import { isProfileCompleteForCertificate } from '../types/user';
+import { createNotification } from '../services/notificationService';
 
 interface ManageCertificateRequestsScreenProps {
   navigation: import('../types/navigation').AppNavigationProp;
@@ -263,6 +264,52 @@ export default function ManageCertificateRequestsScreen({ navigation }: ManageCe
     }
   };
 
+  const handleNotifyAdmin = async (request: CertificateRequestWithUser) => {
+    try {
+      // Get all admins
+      const { data: admins, error: adminError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('role', 'admin');
+
+      if (adminError) throw adminError;
+
+      if (!admins || admins.length === 0) {
+        Alert.alert('Error', 'No admins found in the system');
+        return;
+      }
+
+      // Create notifications for all admins
+      for (const admin of admins) {
+        await createNotification(
+          admin.id,
+          'Certificate Request Needs Review',
+          `${user?.full_name} (Purok Chairman) has forwarded a ${request.certificate_type} request from ${request.user?.full_name}.`,
+          'system',
+          request.id,
+          {
+            resident_name: request.user?.full_name,
+            certificate_type: request.certificate_type,
+            amount: request.amount,
+            purok: request.user?.purok,
+            chairman_name: user?.full_name,
+          }
+        );
+      }
+
+      Alert.alert(
+        'Success',
+        'Admin has been notified about this certificate request.',
+        [{ text: 'OK' }]
+      );
+
+      fetchCertificateRequests();
+    } catch (error) {
+      console.error('Error notifying admin:', error);
+      Alert.alert('Error', 'Failed to notify admin');
+    }
+  };
+
   const openActionModal = (request: CertificateRequestWithUser, action: 'approve' | 'reject') => {
     setSelectedRequest(request);
     setActionType(action);
@@ -379,33 +426,15 @@ export default function ManageCertificateRequestsScreen({ navigation }: ManageCe
       {item.status === 'pending' && (
         <View style={styles.actionButtons}>
           <TouchableOpacity
-            style={[styles.actionButton, styles.approveButton]}
-            onPress={() => openActionModal(item, 'approve')}
+            style={[styles.actionButton, styles.notifyButton]}
+            onPress={() => handleNotifyAdmin(item)}
           >
-            <Ionicons name="checkmark" size={16} color="white" />
-            <Text style={styles.actionButtonText}>Approve</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.rejectButton]}
-            onPress={() => openActionModal(item, 'reject')}
-          >
-            <Ionicons name="close" size={16} color="white" />
-            <Text style={styles.actionButtonText}>Reject</Text>
+            <Ionicons name="notifications" size={16} color="white" />
+            <Text style={styles.actionButtonText}>Notify Admin</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {item.status === 'in_progress' && (
-        <View style={styles.actionButtons}>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.completeButton]}
-            onPress={() => openActionModal(item, 'approve')}
-          >
-            <Ionicons name="checkmark-circle" size={16} color="white" />
-            <Text style={styles.actionButtonText}>Mark Complete</Text>
-          </TouchableOpacity>
-        </View>
-      )}
     </View>
   );
 
@@ -801,14 +830,8 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.md,
     marginHorizontal: theme.spacing.xs,
   },
-  approveButton: {
-    backgroundColor: theme.colors.success,
-  },
-  rejectButton: {
-    backgroundColor: theme.colors.error,
-  },
-  completeButton: {
-    backgroundColor: theme.colors.primary,
+  notifyButton: {
+    backgroundColor: theme.colors.info,
   },
   actionButtonText: {
     color: 'white',

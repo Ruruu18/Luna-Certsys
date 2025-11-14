@@ -20,7 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { theme } from '../styles/theme';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase, User } from '../lib/supabase';
+import { supabase, User, SUPABASE_URL } from '../lib/supabase';
 import { dimensions, spacing, fontSize, borderRadius, scale, verticalScale, moderateScale } from '../utils/responsive';
 import { sendPasswordEmail } from '../services/emailService';
 
@@ -199,23 +199,28 @@ export default function ManageResidentsScreen({ navigation }: ManageResidentsScr
     setIsSubmitting(true);
     try {
       // Generate a temporary password (user will need to reset it)
-      const tempPassword = Math.random().toString(36).substring(2, 15);
+      const tempPassword = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
-      // Sign up the user
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: tempPassword,
-      });
+      console.log('📝 Creating confirmed user account...');
 
-      if (authError) throw authError;
+      // Get auth token for Edge Function call
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
 
-      if (authData.user) {
-        // Create user profile with complete details
-        const { error: profileError } = await supabase
-          .from('users')
-          .insert({
-            id: authData.user.id,
+      // Call Edge Function to create user with auto-confirmed email
+      const response = await fetch(
+        `${SUPABASE_URL}/functions/v1/create-confirmed-user`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
             email: formData.email,
+            password: tempPassword,
             first_name: formData.first_name,
             middle_name: formData.middle_name || null,
             last_name: formData.last_name,
@@ -230,12 +235,22 @@ export default function ManageResidentsScreen({ navigation }: ManageResidentsScr
             street: formData.street,
             address: formData.address,
             phone_number: formData.phone_number,
-            role: 'resident',
-            purok: user?.purok,
-            purok_chairman_id: user?.id,
-          });
+            purok: user?.purok || '',
+            chairman_id: user?.id || '',
+          }),
+        }
+      );
 
-        if (profileError) throw profileError;
+      const result = await response.json();
+
+      if (!result.success) {
+        console.error('❌ User creation failed:', result.error);
+        throw new Error(result.error || 'Failed to create user');
+      }
+
+      console.log('✅ User created successfully:', result);
+
+      if (result.success) {
 
         // Send welcome email with password
         const fullName = `${formData.first_name} ${formData.middle_name ? formData.middle_name + ' ' : ''}${formData.last_name}${formData.suffix ? ' ' + formData.suffix : ''}`.trim();

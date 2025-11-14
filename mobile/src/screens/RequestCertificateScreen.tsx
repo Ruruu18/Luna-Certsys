@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { createCertificateRequest } from '../lib/supabase';
 import { dimensions, spacing, fontSize, borderRadius, scale, verticalScale, moderateScale } from '../utils/responsive';
 import { createNotification } from '../services/notificationService';
+import { useFocusEffect } from '@react-navigation/native';
 
 interface RequestCertificateScreenProps {
   navigation: import('../types/navigation').AppNavigationProp;
@@ -42,6 +43,20 @@ export default function RequestCertificateScreen({ navigation }: RequestCertific
   });
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Reset form when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      setFormData({
+        certificateType: '',
+        purpose: '',
+        quantity: '1',
+        urgency: '',
+        additionalNotes: '',
+      });
+      setErrors({});
+    }, [])
+  );
 
   const certificateTypes = [
     'Barangay Clearance',

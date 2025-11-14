@@ -5,10 +5,12 @@ import * as Crypto from 'expo-crypto';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseServiceRoleKey = process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
 
 // Debug logging
 console.log('Supabase URL:', supabaseUrl ? `${supabaseUrl.substring(0, 20)}...` : 'MISSING');
 console.log('Supabase Key:', supabaseAnonKey ? 'PRESENT' : 'MISSING');
+console.log('Service Role Key:', supabaseServiceRoleKey ? 'PRESENT' : 'MISSING');
 
 // Validate environment variables
 if (!supabaseUrl || !supabaseAnonKey) {
@@ -16,6 +18,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
     'Missing Supabase environment variables. Please create a .env file with EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY'
   );
 }
+
+// Export URL for Edge Function calls (after validation, so TypeScript knows it's defined)
+export const SUPABASE_URL: string = supabaseUrl;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -47,6 +52,18 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     },
   },
 });
+
+// ⚠️ SECURITY WARNING: Admin client with service role key
+// Only use for chairman approval operations
+// DO NOT expose this in production builds if possible
+export const supabaseAdmin = supabaseServiceRoleKey
+  ? createClient(supabaseUrl, supabaseServiceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    })
+  : null;
 
 // Listen for auth state changes and handle refresh token errors silently
 supabase.auth.onAuthStateChange(async (event, session) => {
@@ -91,6 +108,8 @@ export interface User {
   role: 'admin' | 'purok_chairman' | 'resident';
   purok?: string;
   phone_number?: string;
+  house_number?: string;
+  street?: string;
   address?: string;
 
   // Personal details (for certificates)

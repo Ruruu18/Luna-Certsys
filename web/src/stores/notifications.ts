@@ -8,7 +8,7 @@ export interface Notification {
   user_id: string
   title: string
   message: string
-  type: 'certificate_status' | 'payment' | 'system' | 'approval' | 'rejection' | 'reminder'
+  type: 'certificate_status' | 'payment' | 'system' | 'approval' | 'rejection' | 'reminder' | 'new_certificate_request'
   related_certificate_id?: string
   is_read: boolean
   metadata?: {
@@ -18,6 +18,10 @@ export interface Notification {
     payment_amount?: number
     payment_method?: string
     payment_reference?: string
+    resident_name?: string
+    purok?: string
+    chairman_name?: string
+    amount?: number
     [key: string]: any
   }
   created_at: string
@@ -366,11 +370,14 @@ export const useNotificationsStore = defineStore('notifications', () => {
   }
 
   /**
-   * Format notification time
+   * Format notification time (using Philippine timezone UTC+8)
    */
   function formatNotificationTime(createdAt: string): string {
-    const now = new Date()
+    // Convert to Philippine Time (UTC+8)
     const notificationDate = new Date(createdAt)
+    const now = new Date()
+
+    // Calculate difference using UTC timestamps (timezone-independent)
     const diffInMs = now.getTime() - notificationDate.getTime()
     const diffInMinutes = Math.floor(diffInMs / 60000)
     const diffInHours = Math.floor(diffInMinutes / 60)
@@ -385,10 +392,12 @@ export const useNotificationsStore = defineStore('notifications', () => {
     } else if (diffInDays < 7) {
       return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`
     } else {
-      return notificationDate.toLocaleDateString('en-US', {
+      // Display date in Philippine timezone (Asia/Manila)
+      return notificationDate.toLocaleDateString('en-PH', {
         month: 'short',
         day: 'numeric',
         year: notificationDate.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+        timeZone: 'Asia/Manila'
       })
     }
   }

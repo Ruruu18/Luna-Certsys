@@ -4,14 +4,14 @@
     <div class="view-header">
       <div class="header-left">
         <h2 class="view-title">User Management</h2>
-        <p class="view-description">Manage system users and their roles</p>
+        <p class="view-description">Manage Purok Chairmen and residents (Residents are added by their chairmen)</p>
       </div>
       <div class="header-right">
         <button @click="showAddModal = true" class="btn btn-primary">
           <svg class="btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
           </svg>
-          Add User
+          Add Chairman User
         </button>
       </div>
     </div>
@@ -56,8 +56,8 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
         </svg>
         <h3>No users found</h3>
-        <p>{{ searchQuery ? 'No users match your search' : 'Get started by adding your first user' }}</p>
-        <button v-if="!searchQuery" @click="showAddModal = true" class="btn btn-primary">Add User</button>
+        <p>{{ searchQuery ? 'No users match your search' : 'Get started by adding your first Purok Chairman' }}</p>
+        <button v-if="!searchQuery" @click="showAddModal = true" class="btn btn-primary">Add Chairman User</button>
       </div>
 
       <table v-else class="table">
@@ -167,7 +167,7 @@
     <div v-if="showAddModal || showEditModal" class="modal" @click="closeModal">
       <div class="modal-content" @click.stop>
         <div class="modal-header">
-          <h3 class="modal-title">{{ showEditModal ? 'Edit User' : 'Add New User' }}</h3>
+          <h3 class="modal-title">{{ showEditModal ? 'Edit User' : 'Add Chairman User' }}</h3>
         </div>
 
         <div class="modal-body">
@@ -240,7 +240,21 @@
               />
             </div>
 
-            <div class="form-group">
+            <!-- Role is always Purok Chairman for new users -->
+            <div v-if="!showEditModal" class="form-group">
+              <label class="form-label">Role</label>
+              <input
+                type="text"
+                class="form-input"
+                value="Purok Chairman"
+                disabled
+                style="background-color: #f3f4f6; cursor: not-allowed;"
+              />
+              <small class="form-help text-muted">Only Purok Chairmen can be created from this interface</small>
+            </div>
+
+            <!-- Show role selector only when editing -->
+            <div v-if="showEditModal" class="form-group">
               <label for="role" class="form-label">Role</label>
               <select
                 id="role"
@@ -255,7 +269,7 @@
             </div>
 
             <!-- Photo Upload for Purok Chairman -->
-            <div v-if="formData.role === 'purok_chairman'" class="form-group">
+            <div v-if="formData.role === 'purok_chairman' || !showEditModal" class="form-group">
               <label class="form-label">
                 Chairman Photo
                 <span v-if="!showEditModal" class="text-danger">*</span>
@@ -311,8 +325,8 @@
               />
             </div>
 
-            <!-- Purok Chairman selector (only for residents) -->
-            <div v-if="formData.role === 'resident'" class="form-group">
+            <!-- Purok Chairman selector (only for residents in edit mode) -->
+            <div v-if="formData.role === 'resident' && showEditModal" class="form-group">
               <label for="purok_chairman" class="form-label">
                 Purok Chairman
                 <span class="text-muted">(Optional)</span>
@@ -481,7 +495,7 @@
             :disabled="formLoading"
           >
             <div v-if="formLoading" class="spinner"></div>
-            {{ showEditModal ? 'Update' : 'Create' }} User
+            {{ showEditModal ? 'Update User' : 'Create Chairman User' }}
           </button>
         </div>
       </div>
@@ -740,7 +754,7 @@ const formData = ref({
   suffix: '',
   full_name: '',
   email: '',
-  role: 'resident' as 'admin' | 'purok_chairman' | 'resident',
+  role: 'purok_chairman' as 'admin' | 'purok_chairman' | 'resident',
   purok: '',
   purok_chairman_id: '', // Link to chairman
   phone_number: '',
@@ -769,7 +783,7 @@ const resetForm = () => {
     suffix: '',
     full_name: '',
     email: '',
-    role: 'resident' as 'admin' | 'purok_chairman' | 'resident',
+    role: 'purok_chairman' as 'admin' | 'purok_chairman' | 'resident',
     purok: '',
     purok_chairman_id: '',
     phone_number: '',
@@ -1093,6 +1107,9 @@ const handleSubmit = async () => {
       if (updateData.nationality === '') {
         updateData.nationality = null as any
       }
+      if (updateData.face_verified_at === '') {
+        updateData.face_verified_at = null as any
+      }
 
       console.log('📤 Submitting update for user:', editingUser.value.id)
       console.log('📤 Update data:', updateData)
@@ -1182,6 +1199,9 @@ const handleSubmit = async () => {
       }
       if (createData.nationality === '') {
         createData.nationality = null as any
+      }
+      if (createData.face_verified_at === '') {
+        createData.face_verified_at = null as any
       }
 
       console.log('📤 Creating new user with data:', createData)

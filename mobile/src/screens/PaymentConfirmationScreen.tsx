@@ -78,7 +78,15 @@ export default function PaymentConfirmationScreen({ navigation, route }: Payment
         end={{ x: 1, y: 1 }}
       >
         <View style={styles.headerContent}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={handleGoToDashboard}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={moderateScale(24)} color="white" />
+          </TouchableOpacity>
           <Text style={styles.headerTitle}>Payment Successful</Text>
+          <View style={styles.headerRight} />
         </View>
       </LinearGradient>
 
@@ -240,15 +248,30 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
   },
   headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+  },
+  backButton: {
+    width: moderateScale(40),
+    height: moderateScale(40),
+    borderRadius: moderateScale(20),
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   headerTitle: {
     fontSize: fontSize.xl,
     fontWeight: theme.fontWeight.bold,
     fontFamily: theme.fontFamily.bold,
     color: 'white',
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: spacing.md,
+  },
+  headerRight: {
+    width: moderateScale(40),
   },
   scrollContainer: {
     flex: 1,
