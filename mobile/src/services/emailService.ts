@@ -1,11 +1,14 @@
 /**
  * Email Service for Luna CERTSYS
  * Sends emails for registration approval, password delivery, etc.
+ * Using Brevo (formerly Sendinblue) for email delivery
  */
 
 import { EMAIL_ASSETS } from './emailAssets';
 
-const RESEND_API_KEY = process.env.EXPO_PUBLIC_RESEND_API_KEY;
+const BREVO_API_KEY = process.env.EXPO_PUBLIC_BREVO_API_KEY;
+const BREVO_SENDER_EMAIL = process.env.EXPO_PUBLIC_BREVO_SENDER_EMAIL;
+const BREVO_SENDER_NAME = process.env.EXPO_PUBLIC_BREVO_SENDER_NAME || 'Luna CERTSYS';
 
 export interface EmailParams {
   to: string;
@@ -22,48 +25,87 @@ export interface PasswordEmailParams {
 }
 
 /**
- * Send email using Resend API
- * Resend is a modern email service perfect for transactional emails
- * Sign up at: https://resend.com
+ * Send email using Brevo API
+ * Brevo (formerly Sendinblue) is a reliable email service for transactional emails
+ * Sign up at: https://brevo.com
  */
 export async function sendEmail(params: EmailParams): Promise<{ success: boolean; error?: string }> {
   try {
-    if (!RESEND_API_KEY) {
-      console.error('RESEND_API_KEY not found in environment variables');
+    if (!BREVO_API_KEY) {
+      console.error('❌ BREVO_API_KEY not found in environment variables');
       return {
         success: false,
-        error: 'Email service not configured. Please add RESEND_API_KEY to .env'
+        error: 'Email service not configured. Please add BREVO_API_KEY to .env'
       };
     }
 
-    const response = await fetch('https://api.resend.com/emails', {
+    if (!BREVO_SENDER_EMAIL) {
+      console.error('❌ BREVO_SENDER_EMAIL not found in environment variables');
+      console.error('Please add EXPO_PUBLIC_BREVO_SENDER_EMAIL to your .env file');
+      console.error('Use a verified email address from your Brevo account');
+      return {
+        success: false,
+        error: 'Sender email not configured. Please add BREVO_SENDER_EMAIL to .env with a verified email address'
+      };
+    }
+
+    const senderEmail = params.from || BREVO_SENDER_EMAIL;
+
+    console.log('📧 Sending email via Brevo...');
+    console.log('  From:', senderEmail);
+    console.log('  To:', params.to);
+    console.log('  Subject:', params.subject);
+
+    const requestBody = {
+      sender: {
+        name: BREVO_SENDER_NAME,
+        email: senderEmail
+      },
+      to: [
+        {
+          email: params.to
+        }
+      ],
+      subject: params.subject,
+      htmlContent: params.html,
+    };
+
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'api-key': BREVO_API_KEY,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        from: params.from || 'Luna CERTSYS <onboarding@resend.dev>', // Resend testing domain (no verification needed)
-        to: [params.to],
-        subject: params.subject,
-        html: params.html,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('Email sending failed:', data);
+      console.error('❌ Brevo API Error:');
+      console.error('  Status:', response.status);
+      console.error('  Response:', JSON.stringify(data, null, 2));
+
+      let errorMessage = 'Failed to send email';
+      if (data.message) {
+        errorMessage = data.message;
+      }
+      if (data.code === 'unauthorized_sender') {
+        errorMessage = `Sender email "${senderEmail}" is not verified in Brevo. Please verify it in your Brevo dashboard at https://app.brevo.com/settings/senders`;
+      }
+
       return {
         success: false,
-        error: data.message || 'Failed to send email'
+        error: errorMessage
       };
     }
 
-    console.log('✅ Email sent successfully:', data);
+    console.log('✅ Email sent successfully via Brevo!');
+    console.log('  Message ID:', data.messageId);
     return { success: true };
   } catch (error: any) {
     console.error('❌ Email service error:', error);
+    console.error('  Error details:', error.message);
     return {
       success: false,
       error: error.message || 'Failed to send email'

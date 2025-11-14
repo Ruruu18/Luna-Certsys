@@ -9,7 +9,7 @@ import {
   Alert,
   Image,
 } from 'react-native';
-import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
+import { CameraCapturedPicture, CameraView, useCameraPermissions } from 'expo-camera';
 import * as FaceDetector from 'expo-face-detector';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Ionicons } from '@expo/vector-icons';
@@ -175,10 +175,11 @@ export default function FaceCaptureCamera({ onCapture, onCancel }: FaceCapturePr
 
       // Crop to face only
       const face = detectedFaces[0];
-      const croppedPhoto = await cropToFace(photo.uri, face);
+      const croppedPhoto = await cropToFace(photo, face);
 
       setCapturedPhoto(croppedPhoto);
       setInstruction('Photo captured! Review your photo below');
+      setIsCapturing(false);
     } catch (error) {
       console.error('Error capturing photo:', error);
       Alert.alert('Error', 'Failed to capture photo. Please try again.');
@@ -187,28 +188,40 @@ export default function FaceCaptureCamera({ onCapture, onCancel }: FaceCapturePr
     }
   };
 
-  const cropToFace = async (photoUri: string, face: DetectedFace): Promise<string> => {
+  const cropToFace = async (photo: CameraCapturedPicture, face: DetectedFace): Promise<string> => {
     try {
       // Add 30% padding around face
       const padding = 0.3;
-      const x = Math.max(0, face.bounds.origin.x - face.bounds.size.width * padding);
-      const y = Math.max(0, face.bounds.origin.y - face.bounds.size.height * padding);
-      const width = face.bounds.size.width * (1 + 2 * padding);
-      const height = face.bounds.size.height * (1 + 2 * padding);
+      const previewX = Math.max(0, face.bounds.origin.x - face.bounds.size.width * padding);
+      const previewY = Math.max(0, face.bounds.origin.y - face.bounds.size.height * padding);
+      const previewWidth = face.bounds.size.width * (1 + 2 * padding);
+      const previewHeight = face.bounds.size.height * (1 + 2 * padding);
+
+      const photoWidth = photo.width ?? SCREEN_WIDTH;
+      const photoHeight = photo.height ?? SCREEN_HEIGHT;
+      const scaleX = photoWidth / SCREEN_WIDTH;
+      const scaleY = photoHeight / SCREEN_HEIGHT;
+
+      const originX = Math.min(Math.max(previewX * scaleX, 0), photoWidth - 1);
+      const originY = Math.min(Math.max(previewY * scaleY, 0), photoHeight - 1);
+      const cropWidth = Math.max(1, Math.min(previewWidth * scaleX, photoWidth - originX));
+      const cropHeight = Math.max(1, Math.min(previewHeight * scaleY, photoHeight - originY));
+
+      const cropArea = {
+        originX: Math.round(originX),
+        originY: Math.round(originY),
+        width: Math.max(1, Math.round(cropWidth)),
+        height: Math.max(1, Math.round(cropHeight)),
+      };
 
       const manipResult = await ImageManipulator.manipulateAsync(
-        photoUri,
+        photo.uri,
         [
           {
-            flip: ImageManipulator.FlipType.Horizontal, // Un-mirror the front camera photo
+            crop: cropArea,
           },
           {
-            crop: {
-              originX: x,
-              originY: y,
-              width: Math.min(width, SCREEN_WIDTH - x),
-              height: Math.min(height, SCREEN_HEIGHT - y),
-            },
+            flip: ImageManipulator.FlipType.Horizontal, // Un-mirror the front camera photo
           },
           {
             resize: {
@@ -226,7 +239,7 @@ export default function FaceCaptureCamera({ onCapture, onCancel }: FaceCapturePr
     } catch (error) {
       console.error('Error cropping face:', error);
       // If cropping fails, return original
-      return photoUri;
+      return photo.uri;
     }
   };
 

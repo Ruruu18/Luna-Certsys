@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseAdmin } from '../lib/supabase';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
@@ -289,7 +289,10 @@ export async function createNotification(
   error: any;
 }> {
   try {
-    const { data, error } = await supabase
+    // Use admin client to bypass RLS when creating notifications
+    const client = supabaseAdmin || supabase;
+
+    const { data, error } = await client
       .from('notifications')
       .insert({
         user_id: userId,

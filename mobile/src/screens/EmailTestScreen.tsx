@@ -92,7 +92,7 @@ export default function EmailTestScreen({ navigation }: EmailTestScreenProps) {
         setLastResult({ success: false, message: result.error || 'Failed to send' });
         Alert.alert(
           'Failed ✗',
-          `Error: ${result.error}\n\nPlease check:\n• EXPO_PUBLIC_RESEND_API_KEY in .env\n• Restart app after adding API key\n• Email address is valid`,
+          `Error: ${result.error}\n\nPlease check:\n• EXPO_PUBLIC_BREVO_API_KEY in .env\n• EXPO_PUBLIC_BREVO_SENDER_EMAIL is verified in Brevo\n• Restart app after adding API key\n• Email address is valid`,
           [{ text: 'OK' }]
         );
       }
@@ -140,7 +140,7 @@ export default function EmailTestScreen({ navigation }: EmailTestScreenProps) {
           <View style={styles.infoBox}>
             <Ionicons name="information-circle" size={moderateScale(24)} color={theme.colors.primary} />
             <Text style={styles.infoText}>
-              Test the email service before using in production. Make sure you've set up Resend API key in .env file.
+              Test the email service before using in production. Make sure you've set up Brevo API key and verified sender email in .env file.
             </Text>
           </View>
 
@@ -266,15 +266,17 @@ export default function EmailTestScreen({ navigation }: EmailTestScreenProps) {
           <View style={styles.instructionsBox}>
             <Text style={styles.instructionsTitle}>Setup Required:</Text>
             <Text style={styles.instructionsText}>
-              1. Create account at resend.com{'\n'}
-              2. Get API key from dashboard{'\n'}
-              3. Add to .env file:{'\n'}
-              <Text style={styles.codeText}>EXPO_PUBLIC_RESEND_API_KEY=re_...</Text>{'\n'}
-              4. Restart app (npm start){'\n'}
-              5. Test here!
+              1. Create account at brevo.com{'\n'}
+              2. Get API key from Settings → API Keys{'\n'}
+              3. Verify sender email at Settings → Senders{'\n'}
+              4. Add to .env file:{'\n'}
+              <Text style={styles.codeText}>EXPO_PUBLIC_BREVO_API_KEY=xkeysib-...</Text>{'\n'}
+              <Text style={styles.codeText}>EXPO_PUBLIC_BREVO_SENDER_EMAIL=your@email.com</Text>{'\n'}
+              5. Restart app (npm start){'\n'}
+              6. Test here!
             </Text>
             <Text style={styles.instructionsNote}>
-              See EMAIL_SERVICE_SETUP.md for detailed instructions.
+              Free tier: 300 emails/day
             </Text>
           </View>
         </View>
